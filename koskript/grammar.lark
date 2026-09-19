@@ -1,13 +1,14 @@
 // ── Terminals ──────────────────────────────────────────────
-NAME      : /[a-zA-Z_][a-zA-Z0-9_]*/
+// NAME excludes reserved words (keyword reservation).
+NAME      : /(?!(?:if|elseif|else|while|for|foreach|fn|return|local|true|false|and|or|not|in)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 NUMBER    : /[0-9]+(\.[0-9]+)?/
-STRING    : /\"[^\"]*\"|\'[^\']*\'/
+STRING    : /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/
 COMMENT   : /\/\/[^\n]*/
 // Matches a bare `return` at the end of a line (or before a comment/EOF).
 // Higher priority so it wins over the `return` keyword on equal length.
 RETURN_VOID.2 : /return[ \t]*(?=\/\/|\n|$)/
 
-array: "[" expr ("," expr)* "]"
+array: "[" [expr ("," expr)* [","]] "]"
 bool: "true" -> bool_true
     | "false" -> bool_false
 
@@ -15,7 +16,7 @@ lambda_fn: "(" ")" block
          | "(" expr ("," expr)* ")" block -> lambda_fn_args
 
 map_obj: expr ":" expr
-map: "{" map_obj ("," map_obj)* "}"
+map: "{" [map_obj ("," map_obj)* [","]] "}"
 
 // ── Entry point ────────────────────────────────────────────
 ?start        : statement*
@@ -65,7 +66,7 @@ block        : "{" statement* "}"
 
 // ── Expressions ────────────────────────────────────────────
 // Precedence, lowest to highest:
-//   or  <  and  <  not  <  comparison  <  +/-  <  */  <  unary  <  atom
+//   or  <  and  <  not  <  comparison  <  +/-  <  *//%  <  unary  <  postfix
 ?expr_stmt    : expr
 
 ?expr         : or_expr
@@ -94,23 +95,25 @@ block        : "{" statement* "}"
 ?term         : unary
               | term "*" unary -> mul_stmt
               | term "/" unary -> div_stmt
+              | term "%" unary -> mod_stmt
 
-?unary        : atom
+?unary        : postfix
               | "-" unary -> neg_stmt
 
-?atom         : fn_call
-              | NUMBER
+?postfix      : atom
+              | postfix "." NAME -> member_access
+              | postfix "[" expr "]" -> index_access
+              | postfix "(" [arg_list] ")" -> fn_call
+
+?atom         : NUMBER
               | STRING
               | array
               | map
-              | member_access
               | bool
               | lambda_fn
+              | NAME
               | "(" expr ")"
 
-// ── Function call ──────────────────────────────────────────
-fn_call      : member_access "(" arg_list? ")"
-member_access: NAME ("." NAME)*
 arg_list     : expr ("," expr)*
 
 // ── Ignored tokens ─────────────────────────────────────────

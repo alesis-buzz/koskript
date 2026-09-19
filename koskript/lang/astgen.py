@@ -1,12 +1,43 @@
 from lark import Transformer
 from .emtypes import *
 
+_ESCAPES = {
+    "n": "\n",
+    "t": "\t",
+    "r": "\r",
+    "0": "\0",
+    "\\": "\\",
+    '"': '"',
+    "'": "'",
+}
+
+
+def _unescape(raw: str) -> str:
+    out = []
+    i = 0
+    while i < len(raw):
+        ch = raw[i]
+        if ch == "\\" and i + 1 < len(raw):
+            nxt = raw[i + 1]
+            out.append(_ESCAPES.get(nxt, nxt))
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
 class KoskriptTransformer(Transformer):
     def start(self, tree): return (tree)
 
-    def NUMBER(self, token): return IntLit(value=int(token))
+    def NUMBER(self, token):
+        text = str(token)
+        if "." in text:
+            return FloatLit(value=float(text))
+        return IntLit(value=int(text))
+
     def NAME(self, token): return NameRef(name=str(token))
-    def STRING(self, token): return StrLit(value=token[1:-1])
+    def STRING(self, token): return StrLit(value=_unescape(str(token)[1:-1]))
     def bool_true(self, tree): return BoolLit(value=True)
     def bool_false(self, tree): return BoolLit(value=False)
 
@@ -39,6 +70,10 @@ class KoskriptTransformer(Transformer):
     def div_stmt(self, tree):
         left, right = tree
         return DivStmt(left=left, right=right)
+
+    def mod_stmt(self, tree):
+        left, right = tree
+        return ModStmt(left=left, right=right)
 
     def neg_stmt(self, tree):
         return NegStmt(value=tree[0])
@@ -82,11 +117,12 @@ class KoskriptTransformer(Transformer):
         return GtComp(left=left, right=right)
     
     def member_access(self, tree):
-        attrs = tree[1:]
-        if not attrs:
-            return tree[0]
+        value, attr = tree
+        return MemberAccess(name=value, attrs=[attr])
 
-        return MemberAccess(name=tree[0], attrs=tree[1:])
+    def index_access(self, tree):
+        value, index = tree
+        return IndexAccess(value=value, index=index)
 
     def if_stmt(self, tree):
         condition = tree[0]

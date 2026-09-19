@@ -30,6 +30,13 @@ class KoskripInterpreter(object):
         except ReturnSignal:
             pass
 
+    def execute_block(self, body: list):
+        self._push_scope("block")
+        try:
+            self.execute(body)
+        finally:
+            self.scopes.pop()
+
     def _push_scope(self, prefix: str) -> str:
         self._scope_counter += 1
         scope = f"{prefix}_{self._scope_counter}"
@@ -68,6 +75,7 @@ class KoskripInterpreter(object):
     def expr_eval(self, expr):
         match expr:
             case IntLit(value):  return value
+            case FloatLit(value): return value
             case StrLit(value):  return value
             case BoolLit(value): return value
             case NameRef(name):  return self.get_global(name).value
@@ -75,6 +83,7 @@ class KoskripInterpreter(object):
             case SubStmt(l, r):  return self.expr_eval(l) - self.expr_eval(r)
             case MulStmt(l, r):  return self.expr_eval(l) * self.expr_eval(r)
             case DivStmt(l, r):  return self.expr_eval(l) / self.expr_eval(r)
+            case ModStmt(l, r):  return self.expr_eval(l) % self.expr_eval(r)
             case NegStmt(v):     return -self.expr_eval(v)
             case ArrayLit(array): return [self.expr_eval(i) for i in array]
 
@@ -98,7 +107,17 @@ class KoskripInterpreter(object):
                         raise Errors.RuntimeError(f"no member with the value {attr} is defined on {value}")
 
                 return value
-                
+
+            case IndexAccess(value, index):
+                container = self.expr_eval(value)
+                key = self.expr_eval(index)
+
+                try:
+                    return container[key]
+                except (KeyError, IndexError, TypeError):
+                    raise Errors.RuntimeError(
+                        f"cannot index {type(container).__name__} with {key!r}")
+
             case FnCall(n, arg): return self.fn_eval(n, arg)
             case LambdaFnDef(p, body): return Function(params=p, body=body)
             case EquComp() | NequComp() | LteComp() | GteComp() | GtComp() | LtComp() \
@@ -106,28 +125,28 @@ class KoskripInterpreter(object):
                 return self.cond_eval(expr)
             case _: raise RuntimeError(f"Unknown expr: {type(expr).__name__}")
 
-    def fn_eval(self, name, args):
-        if type(name) != MemberAccess:
-            func: KoskriptObject = self.get_global(name.name)
+    def fn_eval(self, callee, args):
+        if isinstance(callee, NameRef):
+            func: KoskriptObject = self.get_global(callee.name)
         else:
-            func = self.expr_eval(name)
+            func = self.expr_eval(callee)
             if not isinstance(func, KoskriptObject):
                 func = KoskriptObject(value=func)
 
         if not func:
-            raise NameError(f"no define with the name {name} exists.")
+            raise NameError(f"no define with the name {callee} exists.")
         
         if callable(func.value):
             return func.value(*[self.expr_eval(arg) for arg in args])
 
         if type(func.value) != Function:
-            raise ValueError(f"{name} is not callable.")
+            raise ValueError(f"{callee} is not callable.")
         
         func_params = func.value.params
         func_body = func.value.body
         if type(func_body) != list: func_body = [func_body]
 
-        self._push_scope(f"func_{name}")
+        self._push_scope(f"func_{callee}")
         try:
             for index_param, param in enumerate(func_params):
                 try:
@@ -207,7 +226,7 @@ class KoskripInterpreter(object):
 
     def _while_stmt(self, node: WhileStmt):
         while self.cond_eval(node.condition):
-            self.execute(node.body)
+            self.execute_block(node.body)
 
     def _for_stmt(self, node: ForStmt):
         array_value = self.expr_eval(node.iterable)
@@ -216,16 +235,17 @@ class KoskripInterpreter(object):
             raise NameError(f"for statement only supports maps or arrays.")
 
         self._push_scope(f"for")
-        var = KoskriptObject(None)
-        var.read_only = True
-        self.set_global(node.var, var)
+        try:
+            var = KoskriptObject(None)
+            var.read_only = True
+            self.set_global(node.var, var)
 
-        variable = self.get_global(node.var)
-        for value in array_value:
-            variable.value = value
-            self.execute(node.body)
-        
-        self.scopes.pop()
+            variable = self.get_global(node.var)
+            for value in array_value:
+                variable.value = value
+                self.execute_block(node.body)
+        finally:
+            self.scopes.pop()
         
     def _foritem_stmt(self, node: ForItemStmt):
         map_value = self.expr_eval(node.iterable)
@@ -234,29 +254,30 @@ class KoskripInterpreter(object):
             raise ValueError(f"foreach statement only supports maps.")
 
         self._push_scope(f"foreach")
-        keyvalue = KoskriptObject(None)
-        varvalue = KoskriptObject(None)
+        try:
+            keyvalue = KoskriptObject(None)
+            varvalue = KoskriptObject(None)
 
-        keyvalue.read_only = True
-        varvalue.read_only = True
+            keyvalue.read_only = True
+            varvalue.read_only = True
 
-        self.set_global(node.key, keyvalue)
-        self.set_global(node.var, varvalue)
+            self.set_global(node.key, keyvalue)
+            self.set_global(node.var, varvalue)
 
-        kval = self.get_global(node.key)
-        vval = self.get_global(node.var)
-        for key, value in map_value.items():
-            kval.value = key
-            vval.value = value
-            self.execute(node.body)
-        
-        self.scopes.pop()
+            kval = self.get_global(node.key)
+            vval = self.get_global(node.var)
+            for key, value in map_value.items():
+                kval.value = key
+                vval.value = value
+                self.execute_block(node.body)
+        finally:
+            self.scopes.pop()
     
     def _if_stmt(self, node: IfStmt):
         condition = self.cond_eval(node.condition)
 
         if condition:
-            self.execute(node.body)
+            self.execute_block(node.body)
             return   
 
         for obj in node.if_tree:
@@ -274,8 +295,8 @@ class KoskripInterpreter(object):
         if not condition:
             return False
     
-        self.execute(node.body)
+        self.execute_block(node.body)
         return True
     
     def _else_stmt(self, node: ElseStmt):
-        self.execute(node.body)
+        self.execute_block(node.body)

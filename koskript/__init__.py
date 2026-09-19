@@ -6,7 +6,7 @@ import pathlib, os
 
 grammar_file = open(os.path.join(pathlib.Path(__file__).resolve().parent, "grammar.lark"), "r")
 grammar = Lark(
-    grammar_file, parser="lalr"
+    grammar_file, parser="lalr", maybe_placeholders=False
 )
 
 class KoskriptRuntime(object):
