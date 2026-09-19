@@ -25,6 +25,6 @@ class KoskriptRuntime(object):
         if type(ast) != list:
             ast = [ast]
 
-        self.__interpreter__.execute(ast)
+        self.__interpreter__.run(ast)
 
 __ALL__ = ["KoskriptRuntime", "KoskriptObject"]

@@ -11,8 +11,7 @@ class KoskriptTransformer(Transformer):
     def bool_false(self, tree): return BoolLit(value=False)
 
     def lambda_fn(self, tree):
-        body = tree
-        return LambdaFnDef(params=[], body=body)
+        return LambdaFnDef(params=[], body=tree[0])
 
     def lambda_fn_args(self, tree):
         params, body = tree

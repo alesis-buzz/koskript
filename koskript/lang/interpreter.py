@@ -4,6 +4,7 @@ class KoskripInterpreter(object):
     def __init__(self):
         self.globals = {"_": {}}
         self.scopes = []
+        self._scope_counter = 0
         self._handlers = {
             LocalDecl:   self._local_decl,
             DeclStmt: self._decl,
@@ -20,8 +21,20 @@ class KoskripInterpreter(object):
     
     def execute(self, ast: list):
         for node in ast:
-            value = self.visit(node)
-            if value: return value
+            self.visit(node)
+
+    def run(self, ast: list):
+        # Entry point: a top-level `return` simply stops execution.
+        try:
+            self.execute(ast)
+        except ReturnSignal:
+            pass
+
+    def _push_scope(self, prefix: str) -> str:
+        self._scope_counter += 1
+        scope = f"{prefix}_{self._scope_counter}"
+        self.scopes.append(scope)
+        return scope
 
     def get_global(self, name: str) -> KoskriptObject:
         for scope in reversed(self.scopes):
@@ -46,7 +59,8 @@ class KoskripInterpreter(object):
     def visit(self, node):
         handler = self._handlers.get(type(node))
         if handler is None:
-            raise RuntimeError(f"Unknown node: {type(node).__name__}")
+            # Statements can also be bare expressions (e.g. `f(x)`, `1 + 2`).
+            return self.expr_eval(node)
         return handler(node)
 
     # EVALUATORS ####################################################################
@@ -85,14 +99,16 @@ class KoskripInterpreter(object):
                 return value
                 
             case FnCall(n, arg): return self.fn_eval(n, arg)
-            case LambdaFnDef(p, body): return KoskriptObject(value=Function(params=p, body=body[0]))
+            case LambdaFnDef(p, body): return Function(params=p, body=body)
             case _: raise RuntimeError(f"Unknown expr: {type(expr).__name__}")
 
     def fn_eval(self, name, args):
         if type(name) != MemberAccess:
             func: KoskriptObject = self.get_global(name.name)
         else:
-            func: KoskriptObject = self.expr_eval(name)
+            func = self.expr_eval(name)
+            if not isinstance(func, KoskriptObject):
+                func = KoskriptObject(value=func)
 
         if not func:
             raise NameError(f"no define with the name {name} exists.")
@@ -107,21 +123,25 @@ class KoskripInterpreter(object):
         func_body = func.value.body
         if type(func_body) != list: func_body = [func_body]
 
-        self.scopes.append(f"func_{name}")
-        for index_param, param in enumerate(func_params):
-            try:
-                self.set_global(
-                    name=param, 
-                    value=KoskriptObject(
-                        self.expr_eval(args[index_param]), 
-                        read_only=True)
-                )
-            except IndexError:
-                break
-        
-        value = self.execute(func_body)
-        self.scopes.pop()
-        return value
+        self._push_scope(f"func_{name}")
+        try:
+            for index_param, param in enumerate(func_params):
+                try:
+                    self.set_global(
+                        name=param, 
+                        value=KoskriptObject(
+                            self.expr_eval(args[index_param]), 
+                            read_only=True)
+                    )
+                except IndexError:
+                    break
+            
+            self.execute(func_body)
+        except ReturnSignal as signal:
+            return signal.value
+        finally:
+            self.scopes.pop()
+        return None
 
 
     def cond_eval(self, condition):
@@ -136,7 +156,9 @@ class KoskripInterpreter(object):
             case AndCond(l, r): return self.cond_eval(l) and self.cond_eval(r)
             case OrCond(l, r): return self.cond_eval(l) or self.cond_eval(r)
 
-            case NotCond(com): return True if self.cond_eval(com[0]) == False else False
+            case NotCond(com): return not self.cond_eval(com[0])
+
+            case _: return bool(self.expr_eval(condition))
     
 
     # HANDLERS ######################################################################
@@ -176,7 +198,8 @@ class KoskripInterpreter(object):
         return self.fn_eval(node.name, args=node.args)
 
     def _return_stmt(self, node: ReturnStmt):
-        return self.expr_eval(node.value)
+        value = self.expr_eval(node.value) if node.value is not None else None
+        raise ReturnSignal(value)
 
     def _while_stmt(self, node: WhileStmt):
         while self.cond_eval(node.condition):
@@ -191,7 +214,7 @@ class KoskripInterpreter(object):
         if type(array_variable.value) != list and type(array_variable.value) != dict:
             raise NameError(f"for statement only supports maps or arrays.")
 
-        self.scopes.append(f"for_{node.iterable}")
+        self._push_scope(f"for_{node.iterable}")
         var = KoskriptObject(None)
         var.read_only = True
         self.set_global(node.var, var)
@@ -219,7 +242,7 @@ class KoskripInterpreter(object):
         if type(map_variable.value) != dict:
             raise ValueError(f"{map_variable} is not a map.")
 
-        self.scopes.append(f"foreach_{node.iterable}")
+        self._push_scope(f"foreach_{node.iterable}")
         keyvalue = KoskriptObject(None)
         varvalue = KoskriptObject(None)
 

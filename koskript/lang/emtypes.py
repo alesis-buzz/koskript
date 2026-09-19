@@ -13,6 +13,13 @@ NameRef = namedtuple("NameRef", ["name"])
 Function = namedtuple("Function", ["params", "body"])
 MemberAccess = namedtuple("MemberAccess", ["name", "attrs"])
 
+# Control-flow signal raised by `return` so it can unwind out of
+# if/while/for blocks and be caught by the enclosing function call.
+class ReturnSignal(Exception):
+    def __init__(self, value=None):
+        super().__init__("return")
+        self.value = value
+
 # Node Objects
 LocalDecl = namedtuple("LocalDecl", ["name", "value"])
 DeclStmt = namedtuple("DeclStmt", ["name", "value"])
