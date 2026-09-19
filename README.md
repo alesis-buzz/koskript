@@ -38,10 +38,10 @@ git clone https://github.com/alesisce/koskript.git
 ## Quick Start
 
 ```python
-from koskript import KoskriptObject, KoskriptRuntime
+from koskript import KoskriptRuntime
 
 runtime = KoskriptRuntime({
-    "print": KoskriptObject(value=print)
+    "print": print
 })
 runtime.execute("""
 local x = 10
@@ -50,6 +50,8 @@ local y = 26
 print(x+y)
 """)
 ```
+
+Any Python value or callable you pass in is wrapped automatically — no need to build `KoskriptObject` yourself.
 
 ---
 
@@ -266,12 +268,48 @@ The following words cannot be used as identifiers:
 
 ### Python Interop
 
-Any Python function can be exposed to Koskript as a `KoskriptObject`:
+Any Python value or callable can be exposed to Koskript. They are wrapped in a `KoskriptObject` automatically:
 
 ```python
-runtime = KoskriptRuntime(_globals_={
-    "print": KoskriptObject(value=print)
+from koskript import KoskriptRuntime
+
+runtime = KoskriptRuntime({
+    "print": print,
+    "len": len,
 })
+
+# add more later — register() is chainable
+runtime.register("sqrt", math.sqrt)
+runtime["now"] = time.time
+```
+
+### Embedding API
+
+`execute()` returns the value of the last evaluated expression, or the value of a top-level `return`:
+
+```python
+runtime = KoskriptRuntime({"print": print})
+result = runtime.execute("local x = 10\nx * 2")   # 20
+result = runtime.execute("return 1 + 2")           # 3
+```
+
+For a quick one-off script, use the `run()` helper:
+
+```python
+from koskript import run
+
+run("print(1 + 2)", print=print)   # 3
+```
+
+Errors raised by scripts are available under `koskript.Errors`:
+
+```python
+from koskript import Errors
+
+try:
+    runtime.execute("local a = [1]\nprint(a[5])")
+except Errors.RuntimeError as e:
+    print(e)
 ```
 
 ---

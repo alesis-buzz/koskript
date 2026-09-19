@@ -22,15 +22,17 @@ class KoskripInterpreter(object):
         }
     
     def execute(self, ast: list):
+        result = None
         for node in ast:
-            self.visit(node)
+            result = self.visit(node)
+        return result
 
     def run(self, ast: list):
-        # Entry point: a top-level `return` simply stops execution.
+        # Entry point: a top-level `return` stops execution and yields its value.
         try:
-            self.execute(ast)
-        except ReturnSignal:
-            pass
+            return self.execute(ast)
+        except ReturnSignal as signal:
+            return signal.value
         except (BreakSignal, ContinueSignal) as signal:
             raise Errors.RuntimeError(f"'{signal}' outside of a loop")
 
