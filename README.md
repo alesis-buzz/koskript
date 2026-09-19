@@ -11,12 +11,14 @@ Koskript is a simple, embeddable, and lightweight scripting language designed to
 ## Features
 
 - Dynamic typing.
-- Lexical scoping with `local` declarations
-- Native Python interop via `PYFN`
+- Block-level lexical scoping with `local` declarations
+- Native Python interop via `KoskriptObject`
 - `if`, `elseif`, `else`
-- `while`, `for`, `foreach` loops
+- `while`, `for`, `foreach` loops with `break` / `continue`
 - Member access — `map.key.subkey`
-- First-class functions with typed parameters and return types
+- Index access — `array[0]`, `map["key"]`
+- First-class functions and lambda expressions
+- Arithmetic (`+`, `-`, `*`, `/`, `%`), comparison and logical operators
 - Embeddable in any Python application
 
 ---
@@ -36,10 +38,10 @@ git clone https://github.com/alesisce/koskript.git
 ## Quick Start
 
 ```python
-from koskript import KoskriptObject, KoskriptRuntime
+from koskript import KoskriptRuntime
 
 runtime = KoskriptRuntime({
-    "print": KoskriptObject(value=print)
+    "print": print
 })
 runtime.execute("""
 local x = 10
@@ -48,6 +50,8 @@ local y = 26
 print(x+y)
 """)
 ```
+
+Any Python value or callable you pass in is wrapped automatically — no need to build `KoskriptObject` yourself.
 
 ---
 
@@ -101,8 +105,10 @@ PASS: Juan -> 88
 | Type | Description |
 |------|-------------|
 | `int` | Integer number |
+| `float` | Floating-point number |
 | `string` | Text string |
 | `bool` | `true` or `false` |
+| `null` | The absence of a value |
 | `array` | Ordered list |
 | `map` | Key-value store |
 
@@ -110,11 +116,16 @@ PASS: Juan -> 88
 
 ```koskript
 local x = 10
+local pi = 3.14
 local name = "Koskript"
 local active = true
+local missing = null
 local items = [1, 2, 3]
+local empty = []
 local config = { "debug": true, "version": 1 }
 ```
+
+Variables declared with `local` are scoped to the block they are declared in — including `if`, `while`, `for` and `foreach` bodies.
 
 ### Functions
 
@@ -125,6 +136,27 @@ fn add(a, b) {
 
 local result = add(10, 20)
 ```
+
+### Operators
+
+```koskript
+local a = 2 + 3 * 4      // 14  (precedence: * / % before + -)
+local b = 10 % 3         // 1
+local c = -a             // unary minus
+local d = (a + b) * 2    // grouping with parentheses
+
+if (x >= 10 and not done or retry) {
+    // ...
+}
+```
+
+| Operators | Description |
+|-----------|-------------|
+| `+` `-` `*` `/` `%` | Arithmetic |
+| `-x` | Unary minus |
+| `==` `!=` `>` `<` `>=` `<=` | Comparison |
+| `and` `or` `not` | Logical (short-circuiting) |
+| `( )` | Grouping |
 
 ### Control Flow
 
@@ -141,15 +173,21 @@ if (x > 10) {
 ### Lambda Functions
 
 ```koskript
-local x = () {
+local greet = () {
     print("Hello world")
 }
 
-x()
+greet()
 
-print(() {
-    print("Hello world function")
-})
+// lambdas can take parameters and return values
+local add = (a, b) {
+    return a + b
+}
+
+print(add(1, 2))
+
+// invoke a lambda literal directly
+print((() { return 42 })())
 ```
 
 ### Loops
@@ -171,6 +209,20 @@ foreach (key, value in config) {
 }
 ```
 
+`break` exits the nearest loop and `continue` skips to the next iteration:
+
+```koskript
+for (item in items) {
+    if (item == 2) {
+        continue   // skip this item
+    }
+    if (item == 5) {
+        break      // stop looping
+    }
+    print(item)
+}
+```
+
 ### Member Access
 
 ```koskript
@@ -179,23 +231,96 @@ print(user.name)
 print(user.age)
 ```
 
+### Index Access
+
+```koskript
+local items = [10, 20, 30]
+print(items[0])        // 10
+print(items[-1])       // 30
+
+local config = { "debug": true }
+print(config["debug"]) // true
+
+// member access and indexing can be chained
+local data = { "nums": [1, 2, 3] }
+print(data.nums[1])    // 2
+```
+
+### Strings
+
+Strings support single or double quotes and the escapes `\n`, `\t`, `\r`, `\0`, `\\`, `\"` and `\'`:
+
+```koskript
+print("line one\nline two")
+```
+
+### Comments
+
+```koskript
+// line comments start with two slashes
+```
+
+### Reserved Keywords
+
+The following words cannot be used as identifiers:
+
+`if` `elseif` `else` `while` `for` `foreach` `fn` `return` `local` `true` `false` `null` `and` `or` `not` `in` `break` `continue`
+
 ### Python Interop
 
-Any Python function can be exposed to Koskript as a `KoskriptObject`:
+Any Python value or callable can be exposed to Koskript. They are wrapped in a `KoskriptObject` automatically:
 
 ```python
-runtime = KoskriptRuntime(_globals_={
-    "print": KoskriptObject(value=print)
+from koskript import KoskriptRuntime
+
+runtime = KoskriptRuntime({
+    "print": print,
+    "len": len,
 })
+
+# add more later — register() is chainable
+runtime.register("sqrt", math.sqrt)
+runtime["now"] = time.time
+```
+
+### Embedding API
+
+`execute()` returns the value of the last evaluated expression, or the value of a top-level `return`:
+
+```python
+runtime = KoskriptRuntime({"print": print})
+result = runtime.execute("local x = 10\nx * 2")   # 20
+result = runtime.execute("return 1 + 2")           # 3
+```
+
+For a quick one-off script, use the `run()` helper:
+
+```python
+from koskript import run
+
+run("print(1 + 2)", print=print)   # 3
+```
+
+Errors raised by scripts are available under `koskript.Errors`:
+
+```python
+from koskript import Errors
+
+try:
+    runtime.execute("local a = [1]\nprint(a[5])")
+except Errors.RuntimeError as e:
+    print(e)
 ```
 
 ---
 
 ## Roadmap
 
+- [x] Index access (`array[0]`, `map["key"]`)
+- [x] `float` type
+- [x] `null` type
+- [x] `break` / `continue` statements
 - [ ] Module imports (`import "mymodule"`)
-- [ ] More types (`float`, `null`)
-- [ ] Index access (`array[0]`, `map["key"]`)
 - [ ] Performance improvements
 - [ ] Standard library
 - [ ] PyPI package

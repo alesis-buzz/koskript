@@ -1,21 +1,53 @@
 from lark import Transformer
 from .emtypes import *
 
+_ESCAPES = {
+    "n": "\n",
+    "t": "\t",
+    "r": "\r",
+    "0": "\0",
+    "\\": "\\",
+    '"': '"',
+    "'": "'",
+}
+
+
+def _unescape(raw: str) -> str:
+    out = []
+    i = 0
+    while i < len(raw):
+        ch = raw[i]
+        if ch == "\\" and i + 1 < len(raw):
+            nxt = raw[i + 1]
+            out.append(_ESCAPES.get(nxt, nxt))
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
 class KoskriptTransformer(Transformer):
     def start(self, tree): return (tree)
 
-    def NUMBER(self, token): return IntLit(value=int(token))
+    def NUMBER(self, token):
+        text = str(token)
+        if "." in text:
+            return FloatLit(value=float(text))
+        return IntLit(value=int(text))
+
     def NAME(self, token): return NameRef(name=str(token))
-    def STRING(self, token): return StrLit(value=token[1:-1])
+    def STRING(self, token): return StrLit(value=_unescape(str(token)[1:-1]))
     def bool_true(self, tree): return BoolLit(value=True)
     def bool_false(self, tree): return BoolLit(value=False)
+    def null_lit(self, tree): return NullLit(value=None)
 
     def lambda_fn(self, tree):
-        body = tree
-        return LambdaFnDef(params=[], body=body)
+        return LambdaFnDef(params=[], body=tree[0])
 
     def lambda_fn_args(self, tree):
-        params, body = tree
+        params = [obj.name for obj in tree[:-1]]
+        body = tree[-1]
         return LambdaFnDef(params=params, body=body)
 
     def array(self, tree): return ArrayLit(value=tree)
@@ -40,6 +72,13 @@ class KoskriptTransformer(Transformer):
         left, right = tree
         return DivStmt(left=left, right=right)
 
+    def mod_stmt(self, tree):
+        left, right = tree
+        return ModStmt(left=left, right=right)
+
+    def neg_stmt(self, tree):
+        return NegStmt(value=tree[0])
+
     def param_list(self, tree):
         return [obj.name for obj in tree]
     
@@ -48,14 +87,14 @@ class KoskriptTransformer(Transformer):
     
     # conditions and comparisons
     def and_cond(self, tree):
-        right, left = tree
+        left, right = tree
         return AndCond(left=left, right=right)
     
     def not_cond(self, tree):
         return NotCond(tree)
     
     def or_cond(self, tree):
-        right, left = tree
+        left, right = tree
         return OrCond(left=left, right=right)
 
 
@@ -79,11 +118,12 @@ class KoskriptTransformer(Transformer):
         return GtComp(left=left, right=right)
     
     def member_access(self, tree):
-        attrs = tree[1:]
-        if not attrs:
-            return tree[0]
+        value, attr = tree
+        return MemberAccess(name=value, attrs=[attr])
 
-        return MemberAccess(name=tree[0], attrs=tree[1:])
+    def index_access(self, tree):
+        value, index = tree
+        return IndexAccess(value=value, index=index)
 
     def if_stmt(self, tree):
         condition = tree[0]
@@ -140,22 +180,31 @@ class KoskriptTransformer(Transformer):
         )
 
     # flow
-    def return_stmt(self, tree):
+    def return_value(self, tree):
         if len(tree) >= 1:
             return ReturnStmt(value=tree[0])
+        return ReturnStmt(value=None)
+
+    def return_void(self, tree):
         return ReturnStmt(value=None)
     
     def while_stmt(self, tree):
         condition, block = tree
         return WhileStmt(condition=condition, body=block)
     
+    def break_stmt(self, tree):
+        return BreakStmt()
+
+    def continue_stmt(self, tree):
+        return ContinueStmt()
+    
     def for_stmt(self, tree):
         varname, iterable, block = tree
-        return ForStmt(var=varname.name, iterable=iterable.name, body=block)
+        return ForStmt(var=varname.name, iterable=iterable, body=block)
     
     def foritem_stmt(self, tree):
         key, value, iterable, block = tree
-        return ForItemStmt(key=key.name, var=value.name, iterable=iterable.name, body=block)
+        return ForItemStmt(key=key.name, var=value.name, iterable=iterable, body=block)
     
     # Otros
     def fn_call(self, tree):

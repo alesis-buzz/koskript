@@ -4,14 +4,33 @@ from typing import Any
 
 # Literals and references
 IntLit = namedtuple("IntLit", ["value"])
+FloatLit = namedtuple("FloatLit", ["value"])
 StrLit = namedtuple("StrLit", ["value"])
 BoolLit = namedtuple("BoolLit", ["value"])
+NullLit = namedtuple("NullLit", ["value"])
 ArrayLit = namedtuple("ArrayLit", ["value"])
 MapLit = namedtuple("MapLit", ["value"])
 MapValue = namedtuple("MapValue", ["key", "value"])
 NameRef = namedtuple("NameRef", ["name"])
 Function = namedtuple("Function", ["params", "body"])
 MemberAccess = namedtuple("MemberAccess", ["name", "attrs"])
+IndexAccess = namedtuple("IndexAccess", ["value", "index"])
+
+# Control-flow signal raised by `return` so it can unwind out of
+# if/while/for blocks and be caught by the enclosing function call.
+class ReturnSignal(Exception):
+    def __init__(self, value=None):
+        super().__init__("return")
+        self.value = value
+
+# Signals raised by `break` / `continue`, caught by the nearest loop.
+class BreakSignal(Exception):
+    def __init__(self):
+        super().__init__("break")
+
+class ContinueSignal(Exception):
+    def __init__(self):
+        super().__init__("continue")
 
 # Node Objects
 LocalDecl = namedtuple("LocalDecl", ["name", "value"])
@@ -23,10 +42,14 @@ LambdaFnDef = namedtuple("LambdaFnDef", ["params", "body"])
 WhileStmt   = namedtuple("WhileStmt",   ["condition", "body"])
 ForStmt     = namedtuple("ForStmt",     ["var", "iterable", "body"])
 ForItemStmt = namedtuple("ForItemStmt", ["key", "var", "iterable", "body"])
+BreakStmt    = namedtuple("BreakStmt", [])
+ContinueStmt = namedtuple("ContinueStmt", [])
 AddStmt = namedtuple("AddStmt", ["left", "right"])
 SubStmt = namedtuple("SubStmt", ["left", "right"])
 MulStmt = namedtuple("MulStmt", ["left", "right"])
 DivStmt = namedtuple("DivStmt", ["left", "right"])
+ModStmt = namedtuple("ModStmt", ["left", "right"])
+NegStmt = namedtuple("NegStmt", ["value"])
 IfStmt = namedtuple("IfStmt", ["condition", "body", "if_tree"])
 ElseIfStmt = namedtuple("ElseIfStmt", ["condition", "body"])
 ElseStmt = namedtuple("ElseStmt", ["body"])
