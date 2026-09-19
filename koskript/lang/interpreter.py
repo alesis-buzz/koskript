@@ -75,6 +75,7 @@ class KoskripInterpreter(object):
             case SubStmt(l, r):  return self.expr_eval(l) - self.expr_eval(r)
             case MulStmt(l, r):  return self.expr_eval(l) * self.expr_eval(r)
             case DivStmt(l, r):  return self.expr_eval(l) / self.expr_eval(r)
+            case NegStmt(v):     return -self.expr_eval(v)
             case ArrayLit(array): return [self.expr_eval(i) for i in array]
 
             case MapValue(key, value): return key, value
@@ -100,6 +101,9 @@ class KoskripInterpreter(object):
                 
             case FnCall(n, arg): return self.fn_eval(n, arg)
             case LambdaFnDef(p, body): return Function(params=p, body=body)
+            case EquComp() | NequComp() | LteComp() | GteComp() | GtComp() | LtComp() \
+               | AndCond() | OrCond() | NotCond():
+                return self.cond_eval(expr)
             case _: raise RuntimeError(f"Unknown expr: {type(expr).__name__}")
 
     def fn_eval(self, name, args):
@@ -206,43 +210,30 @@ class KoskripInterpreter(object):
             self.execute(node.body)
 
     def _for_stmt(self, node: ForStmt):
-        array_variable = self.get_global(node.iterable)
+        array_value = self.expr_eval(node.iterable)
 
-        if not array_variable:
-            raise NameError(f"{array_variable} is not declared.")
-        
-        if type(array_variable.value) != list and type(array_variable.value) != dict:
+        if type(array_value) != list and type(array_value) != dict:
             raise NameError(f"for statement only supports maps or arrays.")
 
-        self._push_scope(f"for_{node.iterable}")
+        self._push_scope(f"for")
         var = KoskriptObject(None)
         var.read_only = True
         self.set_global(node.var, var)
 
-
-        array_value = iter(array_variable.value)
         variable = self.get_global(node.var)
-        while True:
-            try:
-                value = next(array_value)
-                variable.value = value
-
-                self.execute(node.body)
-            except StopIteration:
-                break
+        for value in array_value:
+            variable.value = value
+            self.execute(node.body)
         
         self.scopes.pop()
         
     def _foritem_stmt(self, node: ForItemStmt):
-        map_variable = self.get_global(node.iterable)
+        map_value = self.expr_eval(node.iterable)
 
-        if not map_variable:
-            raise NameError(f"{map_variable} is not declared.")
-        
-        if type(map_variable.value) != dict:
-            raise ValueError(f"{map_variable} is not a map.")
+        if type(map_value) != dict:
+            raise ValueError(f"foreach statement only supports maps.")
 
-        self._push_scope(f"foreach_{node.iterable}")
+        self._push_scope(f"foreach")
         keyvalue = KoskriptObject(None)
         varvalue = KoskriptObject(None)
 
@@ -252,20 +243,12 @@ class KoskripInterpreter(object):
         self.set_global(node.key, keyvalue)
         self.set_global(node.var, varvalue)
 
-        map_variable_value = iter(map_variable.value.items())
         kval = self.get_global(node.key)
         vval = self.get_global(node.var)
-        while True:
-            try:
-                value = next(map_variable_value)
-
-                kval.value = value[0]
-                vval.value = value[1]
-
-                self.execute(node.body)
-
-            except StopIteration:
-                break
+        for key, value in map_value.items():
+            kval.value = key
+            vval.value = value
+            self.execute(node.body)
         
         self.scopes.pop()
     

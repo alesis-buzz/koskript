@@ -14,7 +14,8 @@ class KoskriptTransformer(Transformer):
         return LambdaFnDef(params=[], body=tree[0])
 
     def lambda_fn_args(self, tree):
-        params, body = tree
+        params = [obj.name for obj in tree[:-1]]
+        body = tree[-1]
         return LambdaFnDef(params=params, body=body)
 
     def array(self, tree): return ArrayLit(value=tree)
@@ -39,6 +40,9 @@ class KoskriptTransformer(Transformer):
         left, right = tree
         return DivStmt(left=left, right=right)
 
+    def neg_stmt(self, tree):
+        return NegStmt(value=tree[0])
+
     def param_list(self, tree):
         return [obj.name for obj in tree]
     
@@ -47,14 +51,14 @@ class KoskriptTransformer(Transformer):
     
     # conditions and comparisons
     def and_cond(self, tree):
-        right, left = tree
+        left, right = tree
         return AndCond(left=left, right=right)
     
     def not_cond(self, tree):
         return NotCond(tree)
     
     def or_cond(self, tree):
-        right, left = tree
+        left, right = tree
         return OrCond(left=left, right=right)
 
 
@@ -139,9 +143,12 @@ class KoskriptTransformer(Transformer):
         )
 
     # flow
-    def return_stmt(self, tree):
+    def return_value(self, tree):
         if len(tree) >= 1:
             return ReturnStmt(value=tree[0])
+        return ReturnStmt(value=None)
+
+    def return_void(self, tree):
         return ReturnStmt(value=None)
     
     def while_stmt(self, tree):
@@ -150,11 +157,11 @@ class KoskriptTransformer(Transformer):
     
     def for_stmt(self, tree):
         varname, iterable, block = tree
-        return ForStmt(var=varname.name, iterable=iterable.name, body=block)
+        return ForStmt(var=varname.name, iterable=iterable, body=block)
     
     def foritem_stmt(self, tree):
         key, value, iterable, block = tree
-        return ForItemStmt(key=key.name, var=value.name, iterable=iterable.name, body=block)
+        return ForItemStmt(key=key.name, var=value.name, iterable=iterable, body=block)
     
     # Otros
     def fn_call(self, tree):

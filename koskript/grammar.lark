@@ -3,13 +3,16 @@ NAME      : /[a-zA-Z_][a-zA-Z0-9_]*/
 NUMBER    : /[0-9]+(\.[0-9]+)?/
 STRING    : /\"[^\"]*\"|\'[^\']*\'/
 COMMENT   : /\/\/[^\n]*/
+// Matches a bare `return` at the end of a line (or before a comment/EOF).
+// Higher priority so it wins over the `return` keyword on equal length.
+RETURN_VOID.2 : /return[ \t]*(?=\/\/|\n|$)/
 
 array: "[" expr ("," expr)* "]"
 bool: "true" -> bool_true
     | "false" -> bool_false
 
 lambda_fn: "(" ")" block
-         | "(" param_list ")" block -> lambda_fn_args
+         | "(" expr ("," expr)* ")" block -> lambda_fn_args
 
 map_obj: expr ":" expr
 map: "{" map_obj ("," map_obj)* "}"
@@ -41,10 +44,11 @@ param_list : NAME ("," NAME)*
 
 
 // ── Return ─────────────────────────────────────────────────
-return_stmt  : "return" expr?
+return_stmt  : "return" expr? -> return_value
+             | RETURN_VOID    -> return_void
 
 // ── While ──────────────────────────────────────────────────
-while_stmt   : "while" "(" condition ")" block
+while_stmt   : "while" "(" expr ")" block
 
 // ── For loops ──────────────────────────────────────────────
 for_stmt     : "for" "(" NAME "in" expr ")" block
@@ -52,36 +56,57 @@ foritem_stmt : "foreach" "(" NAME "," NAME "in" expr ")" block
 
 // ── If ─────────────────────────────────────────────────────
 
-if_stmt: "if" "(" condition ")" block elseif_stmt* elsestmt?
-elseif_stmt: "elseif" "(" condition ")" block
+if_stmt: "if" "(" expr ")" block elseif_stmt* elsestmt?
+elseif_stmt: "elseif" "(" expr ")" block
 elsestmt: "else" block
 
 // ── Block ──────────────────────────────────────────────────
 block        : "{" statement* "}"
 
 // ── Expressions ────────────────────────────────────────────
+// Precedence, lowest to highest:
+//   or  <  and  <  not  <  comparison  <  +/-  <  */  <  unary  <  atom
 ?expr_stmt    : expr
-?expr         : fn_call | NUMBER | STRING | array | map | member_access | bool | lambda_fn
-            | expr "+" expr -> add_stmt
-            | expr "-" expr -> sub_stmt
-            | expr "*" expr -> mul_stmt
-            | expr "/" expr -> div_stmt
 
+?expr         : or_expr
 
-?comparison: expr "==" expr -> equ
-            | expr "!=" expr -> nequ
-            | expr ">=" expr -> gte
-            | expr "<=" expr -> lte
-            | expr ">"  expr -> gt
-            | expr "<"  expr -> lt
-            | expr
+?or_expr      : and_expr
+              | or_expr "or" and_expr -> or_cond
 
-?condition: or 
+?and_expr     : not_expr
+              | and_expr "and" not_expr -> and_cond
 
-?or: and ("or" or) -> or_cond | and
-?and: not ("and" and) -> and_cond | not
-?not: "not" comparison -> not_cond | comparison 
+?not_expr     : comparison
+              | "not" not_expr -> not_cond
 
+?comparison   : sum
+              | sum "==" sum -> equ
+              | sum "!=" sum -> nequ
+              | sum ">=" sum -> gte
+              | sum "<=" sum -> lte
+              | sum ">"  sum -> gt
+              | sum "<"  sum -> lt
+
+?sum          : term
+              | sum "+" term -> add_stmt
+              | sum "-" term -> sub_stmt
+
+?term         : unary
+              | term "*" unary -> mul_stmt
+              | term "/" unary -> div_stmt
+
+?unary        : atom
+              | "-" unary -> neg_stmt
+
+?atom         : fn_call
+              | NUMBER
+              | STRING
+              | array
+              | map
+              | member_access
+              | bool
+              | lambda_fn
+              | "(" expr ")"
 
 // ── Function call ──────────────────────────────────────────
 fn_call      : member_access "(" arg_list? ")"
