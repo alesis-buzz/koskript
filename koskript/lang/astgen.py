@@ -40,6 +40,7 @@ class KoskriptTransformer(Transformer):
     def STRING(self, token): return StrLit(value=_unescape(str(token)[1:-1]))
     def bool_true(self, tree): return BoolLit(value=True)
     def bool_false(self, tree): return BoolLit(value=False)
+    def null_lit(self, tree): return NullLit(value=None)
 
     def lambda_fn(self, tree):
         return LambdaFnDef(params=[], body=tree[0])
@@ -190,6 +191,12 @@ class KoskriptTransformer(Transformer):
     def while_stmt(self, tree):
         condition, block = tree
         return WhileStmt(condition=condition, body=block)
+    
+    def break_stmt(self, tree):
+        return BreakStmt()
+
+    def continue_stmt(self, tree):
+        return ContinueStmt()
     
     def for_stmt(self, tree):
         varname, iterable, block = tree

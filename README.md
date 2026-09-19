@@ -14,7 +14,7 @@ Koskript is a simple, embeddable, and lightweight scripting language designed to
 - Block-level lexical scoping with `local` declarations
 - Native Python interop via `KoskriptObject`
 - `if`, `elseif`, `else`
-- `while`, `for`, `foreach` loops
+- `while`, `for`, `foreach` loops with `break` / `continue`
 - Member access — `map.key.subkey`
 - Index access — `array[0]`, `map["key"]`
 - First-class functions and lambda expressions
@@ -106,6 +106,7 @@ PASS: Juan -> 88
 | `float` | Floating-point number |
 | `string` | Text string |
 | `bool` | `true` or `false` |
+| `null` | The absence of a value |
 | `array` | Ordered list |
 | `map` | Key-value store |
 
@@ -116,6 +117,7 @@ local x = 10
 local pi = 3.14
 local name = "Koskript"
 local active = true
+local missing = null
 local items = [1, 2, 3]
 local empty = []
 local config = { "debug": true, "version": 1 }
@@ -205,6 +207,20 @@ foreach (key, value in config) {
 }
 ```
 
+`break` exits the nearest loop and `continue` skips to the next iteration:
+
+```koskript
+for (item in items) {
+    if (item == 2) {
+        continue   // skip this item
+    }
+    if (item == 5) {
+        break      // stop looping
+    }
+    print(item)
+}
+```
+
 ### Member Access
 
 ```koskript
@@ -246,7 +262,7 @@ print("line one\nline two")
 
 The following words cannot be used as identifiers:
 
-`if` `elseif` `else` `while` `for` `foreach` `fn` `return` `local` `true` `false` `and` `or` `not` `in`
+`if` `elseif` `else` `while` `for` `foreach` `fn` `return` `local` `true` `false` `null` `and` `or` `not` `in` `break` `continue`
 
 ### Python Interop
 
@@ -264,8 +280,8 @@ runtime = KoskriptRuntime(_globals_={
 
 - [x] Index access (`array[0]`, `map["key"]`)
 - [x] `float` type
-- [ ] `null` type
-- [ ] `break` / `continue` statements
+- [x] `null` type
+- [x] `break` / `continue` statements
 - [ ] Module imports (`import "mymodule"`)
 - [ ] Performance improvements
 - [ ] Standard library

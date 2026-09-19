@@ -7,6 +7,7 @@ IntLit = namedtuple("IntLit", ["value"])
 FloatLit = namedtuple("FloatLit", ["value"])
 StrLit = namedtuple("StrLit", ["value"])
 BoolLit = namedtuple("BoolLit", ["value"])
+NullLit = namedtuple("NullLit", ["value"])
 ArrayLit = namedtuple("ArrayLit", ["value"])
 MapLit = namedtuple("MapLit", ["value"])
 MapValue = namedtuple("MapValue", ["key", "value"])
@@ -22,6 +23,15 @@ class ReturnSignal(Exception):
         super().__init__("return")
         self.value = value
 
+# Signals raised by `break` / `continue`, caught by the nearest loop.
+class BreakSignal(Exception):
+    def __init__(self):
+        super().__init__("break")
+
+class ContinueSignal(Exception):
+    def __init__(self):
+        super().__init__("continue")
+
 # Node Objects
 LocalDecl = namedtuple("LocalDecl", ["name", "value"])
 DeclStmt = namedtuple("DeclStmt", ["name", "value"])
@@ -32,6 +42,8 @@ LambdaFnDef = namedtuple("LambdaFnDef", ["params", "body"])
 WhileStmt   = namedtuple("WhileStmt",   ["condition", "body"])
 ForStmt     = namedtuple("ForStmt",     ["var", "iterable", "body"])
 ForItemStmt = namedtuple("ForItemStmt", ["key", "var", "iterable", "body"])
+BreakStmt    = namedtuple("BreakStmt", [])
+ContinueStmt = namedtuple("ContinueStmt", [])
 AddStmt = namedtuple("AddStmt", ["left", "right"])
 SubStmt = namedtuple("SubStmt", ["left", "right"])
 MulStmt = namedtuple("MulStmt", ["left", "right"])

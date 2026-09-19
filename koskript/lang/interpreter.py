@@ -14,6 +14,8 @@ class KoskripInterpreter(object):
             WhileStmt:   self._while_stmt,
             ForStmt:     self._for_stmt,
             ForItemStmt: self._foritem_stmt,
+            BreakStmt:    self._break_stmt,
+            ContinueStmt: self._continue_stmt,
             IfStmt: self._if_stmt,
             ElseIfStmt: self._else_if_stmt,
             ElseStmt: self._else_stmt
@@ -29,6 +31,8 @@ class KoskripInterpreter(object):
             self.execute(ast)
         except ReturnSignal:
             pass
+        except (BreakSignal, ContinueSignal) as signal:
+            raise Errors.RuntimeError(f"'{signal}' outside of a loop")
 
     def execute_block(self, body: list):
         self._push_scope("block")
@@ -78,6 +82,7 @@ class KoskripInterpreter(object):
             case FloatLit(value): return value
             case StrLit(value):  return value
             case BoolLit(value): return value
+            case NullLit(value): return value
             case NameRef(name):  return self.get_global(name).value
             case AddStmt(l, r):  return self.expr_eval(l) + self.expr_eval(r)
             case SubStmt(l, r):  return self.expr_eval(l) - self.expr_eval(r)
@@ -160,6 +165,8 @@ class KoskripInterpreter(object):
                     break
             
             self.execute(func_body)
+        except (BreakSignal, ContinueSignal) as signal:
+            raise Errors.RuntimeError(f"'{signal}' outside of a loop")
         except ReturnSignal as signal:
             return signal.value
         finally:
@@ -226,7 +233,12 @@ class KoskripInterpreter(object):
 
     def _while_stmt(self, node: WhileStmt):
         while self.cond_eval(node.condition):
-            self.execute_block(node.body)
+            try:
+                self.execute_block(node.body)
+            except ContinueSignal:
+                continue
+            except BreakSignal:
+                break
 
     def _for_stmt(self, node: ForStmt):
         array_value = self.expr_eval(node.iterable)
@@ -243,7 +255,12 @@ class KoskripInterpreter(object):
             variable = self.get_global(node.var)
             for value in array_value:
                 variable.value = value
-                self.execute_block(node.body)
+                try:
+                    self.execute_block(node.body)
+                except ContinueSignal:
+                    continue
+                except BreakSignal:
+                    break
         finally:
             self.scopes.pop()
         
@@ -269,9 +286,20 @@ class KoskripInterpreter(object):
             for key, value in map_value.items():
                 kval.value = key
                 vval.value = value
-                self.execute_block(node.body)
+                try:
+                    self.execute_block(node.body)
+                except ContinueSignal:
+                    continue
+                except BreakSignal:
+                    break
         finally:
             self.scopes.pop()
+
+    def _break_stmt(self, node: BreakStmt):
+        raise BreakSignal()
+
+    def _continue_stmt(self, node: ContinueStmt):
+        raise ContinueSignal()
     
     def _if_stmt(self, node: IfStmt):
         condition = self.cond_eval(node.condition)
