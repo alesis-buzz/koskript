@@ -11,12 +11,14 @@ Koskript is a simple, embeddable, and lightweight scripting language designed to
 ## Features
 
 - Dynamic typing.
-- Lexical scoping with `local` declarations
-- Native Python interop via `PYFN`
+- Block-level lexical scoping with `local` declarations
+- Native Python interop via `KoskriptObject`
 - `if`, `elseif`, `else`
 - `while`, `for`, `foreach` loops
 - Member access — `map.key.subkey`
-- First-class functions with typed parameters and return types
+- Index access — `array[0]`, `map["key"]`
+- First-class functions and lambda expressions
+- Arithmetic (`+`, `-`, `*`, `/`, `%`), comparison and logical operators
 - Embeddable in any Python application
 
 ---
@@ -101,6 +103,7 @@ PASS: Juan -> 88
 | Type | Description |
 |------|-------------|
 | `int` | Integer number |
+| `float` | Floating-point number |
 | `string` | Text string |
 | `bool` | `true` or `false` |
 | `array` | Ordered list |
@@ -110,11 +113,15 @@ PASS: Juan -> 88
 
 ```koskript
 local x = 10
+local pi = 3.14
 local name = "Koskript"
 local active = true
 local items = [1, 2, 3]
+local empty = []
 local config = { "debug": true, "version": 1 }
 ```
+
+Variables declared with `local` are scoped to the block they are declared in — including `if`, `while`, `for` and `foreach` bodies.
 
 ### Functions
 
@@ -125,6 +132,27 @@ fn add(a, b) {
 
 local result = add(10, 20)
 ```
+
+### Operators
+
+```koskript
+local a = 2 + 3 * 4      // 14  (precedence: * / % before + -)
+local b = 10 % 3         // 1
+local c = -a             // unary minus
+local d = (a + b) * 2    // grouping with parentheses
+
+if (x >= 10 and not done or retry) {
+    // ...
+}
+```
+
+| Operators | Description |
+|-----------|-------------|
+| `+` `-` `*` `/` `%` | Arithmetic |
+| `-x` | Unary minus |
+| `==` `!=` `>` `<` `>=` `<=` | Comparison |
+| `and` `or` `not` | Logical (short-circuiting) |
+| `( )` | Grouping |
 
 ### Control Flow
 
@@ -141,15 +169,21 @@ if (x > 10) {
 ### Lambda Functions
 
 ```koskript
-local x = () {
+local greet = () {
     print("Hello world")
 }
 
-x()
+greet()
 
-print(() {
-    print("Hello world function")
-})
+// lambdas can take parameters and return values
+local add = (a, b) {
+    return a + b
+}
+
+print(add(1, 2))
+
+// invoke a lambda literal directly
+print((() { return 42 })())
 ```
 
 ### Loops
@@ -179,6 +213,41 @@ print(user.name)
 print(user.age)
 ```
 
+### Index Access
+
+```koskript
+local items = [10, 20, 30]
+print(items[0])        // 10
+print(items[-1])       // 30
+
+local config = { "debug": true }
+print(config["debug"]) // true
+
+// member access and indexing can be chained
+local data = { "nums": [1, 2, 3] }
+print(data.nums[1])    // 2
+```
+
+### Strings
+
+Strings support single or double quotes and the escapes `\n`, `\t`, `\r`, `\0`, `\\`, `\"` and `\'`:
+
+```koskript
+print("line one\nline two")
+```
+
+### Comments
+
+```koskript
+// line comments start with two slashes
+```
+
+### Reserved Keywords
+
+The following words cannot be used as identifiers:
+
+`if` `elseif` `else` `while` `for` `foreach` `fn` `return` `local` `true` `false` `and` `or` `not` `in`
+
 ### Python Interop
 
 Any Python function can be exposed to Koskript as a `KoskriptObject`:
@@ -193,9 +262,11 @@ runtime = KoskriptRuntime(_globals_={
 
 ## Roadmap
 
+- [x] Index access (`array[0]`, `map["key"]`)
+- [x] `float` type
+- [ ] `null` type
+- [ ] `break` / `continue` statements
 - [ ] Module imports (`import "mymodule"`)
-- [ ] More types (`float`, `null`)
-- [ ] Index access (`array[0]`, `map["key"]`)
 - [ ] Performance improvements
 - [ ] Standard library
 - [ ] PyPI package
