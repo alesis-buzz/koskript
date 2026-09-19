@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "koskript"
+version = "1.2.1"
+description = "A programming lenguage fully embbeded on python."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+
+authors = [
+    { name = "alesis.buzz" }
+]
+
+keywords = [
+    "scripting",
+    "programming-language",
+    "embedded",
+    "interpreter",
+    "lark"
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    "Topic :: Software Development :: Interpreters",
+]
+
+
+dependencies = [
+    "lark>=1.3.1"
+]
+
+[project.urls]
+Homepage = "https://github.com/alesis-buzz/koskript"
+
+[tool.setuptools.package-data]
+koskript = ["*.lark", "*.json", "*.txt"]

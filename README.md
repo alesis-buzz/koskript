@@ -31,7 +31,11 @@ Clone the repository and import it directly into your project:
 git clone https://github.com/alesisce/koskript.git
 ```
 
-> PyPI package coming soon.
+or
+
+```bash
+pip install -U koskript
+```
 
 ---
 
