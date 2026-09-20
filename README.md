@@ -416,7 +416,7 @@ except Errors.RuntimeError as e:
 - [ ] Module imports (`import "mymodule"`)
 - [ ] Performance improvements
 - [ ] Standard library
-- [ ] PyPI package
+- [x] PyPI package
 - [ ] Custom parser (remove Lark dependency)
 - [ ] VM-based execution
 
