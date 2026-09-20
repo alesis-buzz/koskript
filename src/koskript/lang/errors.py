@@ -3,6 +3,10 @@ class Errors:
         def __init__(self, *args):
             super().__init__(*args)
 
+    class NameError(Exception):
+        def __init__(self, *args):
+            super().__init__(*args)
+
     class MismatchType(Exception):
         def __init__(self, *args):
             super().__init__(*args)

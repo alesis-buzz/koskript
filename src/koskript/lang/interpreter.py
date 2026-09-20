@@ -61,7 +61,7 @@ class KoskriptInterpreter(object):
         if name in self.globals["_"]:
             return self.globals["_"][name]
         
-        raise NameError(f"'{name}' is not defined")
+        raise Errors.NameError(f"'{name}' is not defined")
 
     def set_global(self, name: str, value: KoskriptObject) -> None:
         if self.scopes:
@@ -156,7 +156,7 @@ class KoskriptInterpreter(object):
             case EquComp() | NequComp() | LteComp() | GteComp() | GtComp() | LtComp() \
                | AndCond() | OrCond() | NotCond():
                 return self.cond_eval(expr)
-            case _: raise RuntimeError(f"Unknown expr: {type(expr).__name__}")
+            case _: raise Errors.RuntimeError(f"Unknown expr: {type(expr).__name__}")
 
     def fn_eval(self, callee, args):
         if isinstance(callee, NameRef):
@@ -179,7 +179,7 @@ class KoskriptInterpreter(object):
             return value(*[self.expr_eval(arg) for arg in args])
 
         if type(value) != Function:
-            raise ValueError(f"{callee} is not callable.")
+            raise Errors.MismatchType(f"{callee} is not callable.")
         
         func_params = value.params
         func_body = value.body
@@ -558,7 +558,7 @@ class KoskriptInterpreter(object):
         variable = self.get_global(node.name)
 
         if not variable:
-            raise NameError(f"{node.name} is not declared.")
+            raise Errors.NameError(f"{node.name} is not declared.")
 
         variable.set_value(self.expr_eval(node.value))
 
@@ -593,7 +593,7 @@ class KoskriptInterpreter(object):
         array_value = self.expr_eval(node.iterable)
 
         if type(array_value) != list and type(array_value) != dict:
-            raise NameError(f"for statement only supports maps or arrays.")
+            raise Errors.MismatchType(f"for statement only supports maps or arrays.")
 
         self._push_scope(f"for")
         try:
@@ -617,7 +617,7 @@ class KoskriptInterpreter(object):
         map_value = self.expr_eval(node.iterable)
 
         if type(map_value) != dict:
-            raise ValueError(f"foreach statement only supports maps.")
+            raise Errors.MismatchType(f"foreach statement only supports maps.")
 
         self._push_scope(f"foreach")
         try:
