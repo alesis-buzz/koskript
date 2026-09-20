@@ -258,8 +258,7 @@ const rex = new Dog("Rex")
 print(rex.describe())      // woof Rex (dynamic dispatch)
 print(rex::describe())     // same, called with `::` from outside
 print(rex.parent_speak())  // ...
-print(Dog.kingdom())       // animalia
-print(Dog::kingdom())      // static call with `::` from outside
+print(Dog.kingdom())       // animalia (statics always use `.`)
 ```
 
 Rules:
@@ -273,8 +272,8 @@ Rules:
 | `this.field` | Field access inside instance methods. |
 | `::Method()` | Calls an instance method with the current `this` (dynamic dispatch). |
 | `.Method()` | Calls a static method of the current class. |
-| `instance::Method()` | Calls a method from outside, binding `this` to that instance. |
-| `Class::StaticMethod()` | Calls a static method from outside. |
+| `instance::Method()` | Calls an instance method from outside, binding `this` to that instance. |
+| `Class.Method()` | Calls a static method from outside (statics never use `::`). |
 | `super::Method()` | Calls the parent implementation. |
 | `super::constructor(args)` | Calls the parent constructor (only inside a constructor). |
 | `new Class(args)` | Expression that creates an instance. |

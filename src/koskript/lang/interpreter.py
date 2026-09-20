@@ -293,9 +293,12 @@ class KoskripInterpreter(object):
                 raise Errors.RuntimeError(
                     f"method '{name}' is not defined on '{container.klass.name}'")
 
+            if info.static:
+                raise Errors.RuntimeError(
+                    f"'{name}' is static, call it as '{container.klass.name}.{name}()'")
+
             self._check_private(info, info.defining_class)
-            instance = None if info.static else container
-            return self._invoke_method(info, instance, args)
+            return self._invoke_method(info, container, args)
 
         if isinstance(container, KoskriptClass):
             info = container.find_method(name)
@@ -303,12 +306,12 @@ class KoskripInterpreter(object):
                 raise Errors.RuntimeError(
                     f"method '{name}' is not defined on '{container.name}'")
 
-            if not info.static:
+            if info.static:
                 raise Errors.RuntimeError(
-                    f"'{name}' is an instance method, call it on an instance of '{container.name}'")
+                    f"'{name}' is static, call it as '{container.name}.{name}()'")
 
-            self._check_private(info, info.defining_class)
-            return self._invoke_method(info, None, args)
+            raise Errors.RuntimeError(
+                f"'{name}' is an instance method, call it on an instance of '{container.name}'")
 
         raise Errors.MismatchType(
             f"'::' can only be used on an instance or a class, got {type(container).__name__}")
