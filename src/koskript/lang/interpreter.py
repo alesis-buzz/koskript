@@ -1,6 +1,6 @@
 from .emtypes import *
 
-class KoskripInterpreter(object):
+class KoskriptInterpreter(object):
     def __init__(self):
         self.globals = {"_": {}}
         self.scopes = []
