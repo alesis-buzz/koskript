@@ -4,10 +4,14 @@ class KoskripInterpreter(object):
     def __init__(self):
         self.globals = {"_": {}}
         self.scopes = []
+        self.method_frames = []
         self._scope_counter = 0
         self._handlers = {
             LocalDecl:   self._local_decl,
+            ConstDecl:   self._const_decl,
             DeclStmt: self._decl,
+            MemberAssign: self._member_assign,
+            ClassDef:    self._class_def,
             FnDef:       self._fn_def,
             FnCall:      self._fn_call,
             ReturnStmt:  self._return_stmt,
@@ -104,16 +108,38 @@ class KoskripInterpreter(object):
             case MemberAccess(name, attrs):
                 value = self.expr_eval(name)
 
-                if not isinstance(value, dict):
-                    raise Errors.MismatchType(f"member access only supported on map, got {value}")
-                
                 for attr in attrs:
-                    try:
-                        value = value[attr.name]
-                    except:
-                        raise Errors.RuntimeError(f"no member with the value {attr} is defined on {value}")
+                    value = self._member_get(value, attr.name)
 
                 return value
+
+            case ThisRef():
+                frame = self._current_frame()
+
+                if frame is None or frame.instance is None:
+                    raise Errors.RuntimeError("'this' can only be used inside an instance method")
+
+                return frame.instance
+
+            case NewExpr(class_name, args):
+                target = self.get_global(class_name).value
+
+                if not isinstance(target, KoskriptClass):
+                    raise Errors.RuntimeError(f"'{class_name}' is not a class")
+
+                return self._instantiate(target, args)
+
+            case MethodCall(name, args):
+                return self._method_call(name, args)
+
+            case BoundMethodCall(target, name, args):
+                return self._bound_method_call(target, name, args)
+
+            case SuperCall(name, args):
+                return self._super_call(name, args)
+
+            case StaticRef(name):
+                return self._static_ref(name)
 
             case IndexAccess(value, index):
                 container = self.expr_eval(value)
@@ -135,45 +161,275 @@ class KoskripInterpreter(object):
     def fn_eval(self, callee, args):
         if isinstance(callee, NameRef):
             func: KoskriptObject = self.get_global(callee.name)
+            value = func.value
         else:
-            func = self.expr_eval(callee)
-            if not isinstance(func, KoskriptObject):
-                func = KoskriptObject(value=func)
+            value = self.expr_eval(callee)
 
-        if not func:
-            raise NameError(f"no define with the name {callee} exists.")
-        
-        if callable(func.value):
-            return func.value(*[self.expr_eval(arg) for arg in args])
+        if isinstance(value, BoundMethod):
+            return self._invoke_method(value.info, value.instance, args)
 
-        if type(func.value) != Function:
+        if isinstance(value, KoskriptClass):
+            raise Errors.RuntimeError(
+                f"class '{value.name}' is not callable, use 'new {value.name}()'")
+
+        if isinstance(value, KoskriptObject):
+            value = value.value
+
+        if callable(value):
+            return value(*[self.expr_eval(arg) for arg in args])
+
+        if type(value) != Function:
             raise ValueError(f"{callee} is not callable.")
         
-        func_params = func.value.params
-        func_body = func.value.body
+        func_params = value.params
+        func_body = value.body
         if type(func_body) != list: func_body = [func_body]
 
         self._push_scope(f"func_{callee}")
+        self.method_frames.append(Frame(instance=None, klass=None, info=None))
         try:
-            for index_param, param in enumerate(func_params):
-                try:
-                    self.set_global(
-                        name=param, 
-                        value=KoskriptObject(
-                            self.expr_eval(args[index_param]), 
-                            read_only=True)
-                    )
-                except IndexError:
-                    break
-            
+            self._bind_params(func_params, args)
             self.execute(func_body)
         except (BreakSignal, ContinueSignal) as signal:
             raise Errors.RuntimeError(f"'{signal}' outside of a loop")
         except ReturnSignal as signal:
             return signal.value
         finally:
+            self.method_frames.pop()
             self.scopes.pop()
         return None
+
+    # CLASSES #######################################################################
+
+    def _current_frame(self):
+        return self.method_frames[-1] if self.method_frames else None
+
+    def _bind_params(self, params: list, args: list):
+        for index_param, param in enumerate(params):
+            try:
+                self.set_global(
+                    name=param,
+                    value=KoskriptObject(
+                        self.expr_eval(args[index_param]),
+                        read_only=True)
+                )
+            except IndexError:
+                break
+
+    def _invoke_method(self, info: MethodInfo, instance, args: list):
+        self._push_scope(f"method_{info.name}")
+        self.method_frames.append(
+            Frame(instance=instance, klass=info.defining_class, info=info))
+        try:
+            self._bind_params(info.params, args)
+            try:
+                self.execute(info.body)
+            except ReturnSignal as signal:
+                return signal.value
+        except (BreakSignal, ContinueSignal) as signal:
+            raise Errors.RuntimeError(f"'{signal}' outside of a loop")
+        finally:
+            self.method_frames.pop()
+            self.scopes.pop()
+        return None
+
+    def _instantiate(self, klass: KoskriptClass, args: list) -> KoskriptInstance:
+        instance = KoskriptInstance(klass)
+
+        for defining_class in klass.mro():
+            for name, field in defining_class.fields.items():
+                self._push_scope("class_fields")
+                self.method_frames.append(
+                    Frame(instance=instance, klass=defining_class, info=None))
+                try:
+                    instance.fields[name] = self.expr_eval(field.value)
+                finally:
+                    self.method_frames.pop()
+                    self.scopes.pop()
+
+        constructor = klass.find_constructor()
+        if constructor is not None:
+            self._check_private(constructor, constructor.defining_class)
+            self._invoke_method(constructor, instance, args)
+
+        return instance
+
+    def _method_call(self, name: str, args: list):
+        frame = self._current_frame()
+
+        if frame is None or frame.klass is None:
+            raise Errors.RuntimeError("'::' can only be used inside a class method")
+
+        if frame.instance is None:
+            raise Errors.RuntimeError(f"cannot call instance method '{name}' from a static method")
+
+        # Private methods are resolved non-virtually in their defining class;
+        # public ones use dynamic dispatch on the actual instance class.
+        info = None
+        if frame.klass is not None:
+            own = frame.klass.find_method(name)
+            if own is not None and own.visibility == "private":
+                info = own
+
+        if info is None:
+            start = frame.instance.klass
+            info = start.find_method(name)
+
+        if info is None:
+            raise Errors.RuntimeError(f"method '{name}' is not defined in '{frame.klass.name}'")
+
+        if info.static:
+            raise Errors.RuntimeError(f"'{name}' is static, call it as .{name}()")
+
+        self._check_private(info, info.defining_class)
+        return self._invoke_method(info, frame.instance, args)
+
+    def _bound_method_call(self, target, name: str, args: list):
+        container = self.expr_eval(target)
+
+        if isinstance(container, KoskriptInstance):
+            info = container.klass.find_method(name)
+            if info is None:
+                raise Errors.RuntimeError(
+                    f"method '{name}' is not defined on '{container.klass.name}'")
+
+            self._check_private(info, info.defining_class)
+            instance = None if info.static else container
+            return self._invoke_method(info, instance, args)
+
+        if isinstance(container, KoskriptClass):
+            info = container.find_method(name)
+            if info is None:
+                raise Errors.RuntimeError(
+                    f"method '{name}' is not defined on '{container.name}'")
+
+            if not info.static:
+                raise Errors.RuntimeError(
+                    f"'{name}' is an instance method, call it on an instance of '{container.name}'")
+
+            self._check_private(info, info.defining_class)
+            return self._invoke_method(info, None, args)
+
+        raise Errors.MismatchType(
+            f"'::' can only be used on an instance or a class, got {type(container).__name__}")
+
+    def _super_call(self, name: str, args: list):
+        frame = self._current_frame()
+
+        if frame is None or frame.instance is None:
+            raise Errors.RuntimeError("'super::' can only be used inside an instance method")
+
+        parent = frame.klass.parent if frame.klass else None
+        if parent is None:
+            raise Errors.RuntimeError(f"class '{frame.klass.name}' has no parent class")
+
+        if name == "constructor":
+            if frame.info is None or not frame.info.is_constructor:
+                raise Errors.RuntimeError(
+                    "'super::constructor()' can only be called from a constructor")
+
+            constructor = parent.find_constructor()
+            if constructor is None:
+                raise Errors.RuntimeError(f"class '{parent.name}' has no constructor")
+
+            self._check_private(constructor, constructor.defining_class)
+            self._invoke_method(constructor, frame.instance, args)
+            return frame.instance
+
+        info = parent.find_method(name)
+        if info is None:
+            raise Errors.RuntimeError(f"method '{name}' is not defined in '{parent.name}'")
+
+        if info.static:
+            raise Errors.RuntimeError(f"'{name}' is static, call it as .{name}()")
+
+        self._check_private(info, info.defining_class)
+        return self._invoke_method(info, frame.instance, args)
+
+    def _static_ref(self, name: str):
+        frame = self._current_frame()
+
+        if frame is None or frame.klass is None:
+            raise Errors.RuntimeError("'.' static calls can only be used inside a class method")
+
+        info = frame.klass.find_method(name)
+        if info is None:
+            raise Errors.RuntimeError(f"static method '{name}' is not defined in '{frame.klass.name}'")
+
+        if not info.static:
+            raise Errors.RuntimeError(f"'{name}' is not static, call it as ::{name}()")
+
+        self._check_private(info, info.defining_class)
+        return BoundMethod(None, info)
+
+    def _check_private(self, info_or_field, defining_class):
+        if info_or_field.visibility != "private":
+            return
+
+        frame = self._current_frame()
+        if frame is None or frame.klass is not defining_class:
+            raise Errors.RuntimeError(
+                f"'{info_or_field.name}' is private to '{defining_class.name}' and cannot be accessed from outside")
+
+    def _member_get(self, container, attr: str):
+        if isinstance(container, dict):
+            try:
+                return container[attr]
+            except KeyError:
+                raise Errors.RuntimeError(f"no member with the value '{attr}' is defined on {container}")
+
+        if isinstance(container, KoskriptInstance):
+            found = container.klass.find_field(attr)
+            if found is not None:
+                defining_class, field = found
+                self._check_private(field, defining_class)
+                return container.fields[attr]
+
+            info = container.klass.find_method(attr)
+            if info is not None:
+                if info.static:
+                    raise Errors.RuntimeError(
+                        f"'{attr}' is static, call it as '{container.klass.name}.{attr}()'")
+                self._check_private(info, info.defining_class)
+                return BoundMethod(container, info)
+
+            raise Errors.RuntimeError(
+                f"'{attr}' is not defined on '{container.klass.name}'")
+
+        if isinstance(container, KoskriptClass):
+            info = container.find_method(attr)
+            if info is None:
+                raise Errors.RuntimeError(
+                    f"'{container.name}' has no member '{attr}'")
+
+            if not info.static:
+                raise Errors.RuntimeError(
+                    f"'{attr}' is an instance method, call it on an instance of '{container.name}'")
+
+            self._check_private(info, info.defining_class)
+            return BoundMethod(None, info)
+
+        raise Errors.MismatchType(
+            f"member access only supported on map, instance or class, got {type(container).__name__}")
+
+    def _member_set(self, container, attr: str, value):
+        if isinstance(container, dict):
+            container[attr] = value
+            return
+
+        if isinstance(container, KoskriptInstance):
+            found = container.klass.find_field(attr)
+            if found is None:
+                raise Errors.RuntimeError(
+                    f"'{attr}' is not a field of '{container.klass.name}'")
+
+            defining_class, field = found
+            self._check_private(field, defining_class)
+            container.fields[attr] = value
+            return
+
+        raise Errors.MismatchType(
+            f"cannot assign member on {type(container).__name__}")
 
 
     def cond_eval(self, condition):
@@ -205,6 +461,94 @@ class KoskripInterpreter(object):
                 value=value
             )
         )
+
+    def _const_decl(self, node: ConstDecl):
+        self.set_global(
+            name=node.name,
+            value=KoskriptObject(
+                value=self.expr_eval(node.value),
+                read_only=True
+            )
+        )
+
+    def _member_assign(self, node: MemberAssign):
+        value = self.expr_eval(node.value)
+        container = self.expr_eval(node.target)
+        self._member_set(container, node.attr, value)
+
+    def _class_def(self, node: ClassDef):
+        parent = None
+        if node.parent is not None:
+            parent_value = self.get_global(node.parent).value
+            if not isinstance(parent_value, KoskriptClass):
+                raise Errors.RuntimeError(f"'{node.parent}' is not a class")
+            parent = parent_value
+
+        klass = KoskriptClass(name=node.name, parent=parent)
+
+        for field in node.fields:
+            info = FieldInfo(field.name, field.value, field.modifiers)
+
+            if info.static:
+                raise Errors.RuntimeError(
+                    f"field '{field.name}' cannot be static (only methods can be static)")
+
+            if info.name in klass.fields or info.name in klass.methods:
+                raise Errors.RuntimeError(
+                    f"'{info.name}' is already defined in class '{node.name}'")
+
+            if parent is not None and (
+                    parent.find_field(info.name) is not None
+                    or parent.find_method(info.name) is not None):
+                raise Errors.RuntimeError(
+                    f"field '{info.name}' shadows an inherited member of '{parent.name}'")
+
+            info.defining_class = klass
+            klass.fields[info.name] = info
+
+        for method in node.methods:
+            info = MethodInfo(
+                method.name, method.params, method.body,
+                method.modifiers, is_constructor=False
+            )
+
+            if info.name in klass.methods or info.name in klass.fields:
+                raise Errors.RuntimeError(
+                    f"'{info.name}' is already defined in class '{node.name}'")
+
+            if parent is not None:
+                if parent.find_field(info.name) is not None:
+                    raise Errors.RuntimeError(
+                        f"method '{info.name}' shadows an inherited field of '{parent.name}'")
+
+                inherited = parent.find_method(info.name)
+                if inherited is not None and inherited.static != info.static:
+                    kind = "static" if inherited.static else "instance"
+                    raise Errors.RuntimeError(
+                        f"cannot override {kind} method '{info.name}' of '{parent.name}' "
+                        f"with a {'static' if info.static else 'instance'} method")
+
+            info.defining_class = klass
+            klass.methods[info.name] = info
+
+        if len(node.constructors) > 1:
+            raise Errors.RuntimeError(
+                f"class '{node.name}' defines more than one constructor")
+
+        if node.constructors:
+            method = node.constructors[0]
+            constructor = MethodInfo(
+                method.name, method.params, method.body,
+                method.modifiers, is_constructor=True
+            )
+
+            if constructor.static:
+                raise Errors.RuntimeError("a constructor cannot be static")
+
+            constructor.defining_class = klass
+            klass.constructor = constructor
+
+        self.set_global(node.name, KoskriptObject(value=klass))
 
 
     def _decl(self, node: DeclStmt):

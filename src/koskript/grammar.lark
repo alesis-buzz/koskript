@@ -1,6 +1,6 @@
 // ── Terminals ──────────────────────────────────────────────
 // NAME excludes reserved words (keyword reservation).
-NAME      : /(?!(?:if|elseif|else|while|for|foreach|fn|return|local|true|false|null|and|or|not|in|break|continue)\b)[a-zA-Z_][a-zA-Z0-9_]*/
+NAME      : /(?!(?:if|elseif|else|while|for|foreach|fn|return|local|const|true|false|null|and|or|not|in|break|continue|class|extends|new|static|public|private|this|super|constructor)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 NUMBER    : /[0-9]+(\.[0-9]+)?/
 STRING    : /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/
 COMMENT   : /\/\/[^\n]*/
@@ -23,6 +23,8 @@ map: "{" [map_obj ("," map_obj)* [","]] "}"
 
 // ── Statements ─────────────────────────────────────────────
 ?statement    : local_decl
+            | const_decl
+            | class_def
             | fn_def
             | return_stmt
             | while_stmt
@@ -30,13 +32,41 @@ map: "{" [map_obj ("," map_obj)* [","]] "}"
             | foritem_stmt
             | break_stmt
             | continue_stmt
+            | member_assign
             | expr_stmt
             | decl
             | if_stmt
 
 // ── Variable declaration ───────────────────────────────────
 local_decl   : "local" NAME "=" expr
+const_decl   : "const" NAME "=" expr
 decl: NAME "=" expr
+
+// Assignment to a member: `this.x = value`, `obj.x = value`
+member_assign: postfix "." NAME "=" expr
+
+// ── Class definition ───────────────────────────────────────
+class_def     : "class" NAME class_body -> class_def_simple
+              | "class" NAME "extends" NAME class_body -> class_def_extends
+
+class_body    : "{" class_member* "}"
+
+?class_member : field_decl
+              | method_def
+              | constructor_def
+
+modifier      : "static"  -> mod_static
+              | "public"  -> mod_public
+              | "private" -> mod_private
+
+field_decl    : modifier* NAME "=" expr
+
+// Methods default to public when no visibility modifier is given.
+method_def    : modifier* "fn" NAME "(" param_list ")" block -> method_def_args
+              | modifier* "fn" NAME "(" ")" block -> method_def_nargs
+
+constructor_def : modifier* "constructor" "(" param_list ")" block -> constructor_def_args
+                | modifier* "constructor" "(" ")" block -> constructor_def_nargs
 
 // ── Function definition ────────────────────────────────────
 fn_def       : "fn" NAME "(" param_list ")" block
@@ -110,6 +140,7 @@ block        : "{" statement* "}"
               | postfix "." NAME -> member_access
               | postfix "[" expr "]" -> index_access
               | postfix "(" [arg_list] ")" -> fn_call
+              | postfix "::" NAME "(" [arg_list] ")" -> bound_method_call
 
 ?atom         : NUMBER
               | STRING
@@ -117,9 +148,24 @@ block        : "{" statement* "}"
               | map
               | bool
               | "null" -> null_lit
+              | "this" -> this_ref
+              | new_expr
+              | method_call
+              | super_call
+              | static_ref
               | lambda_fn
               | NAME
               | "(" expr ")"
+
+// ── Classes (expressions) ──────────────────────────────────
+new_expr     : "new" NAME "(" [arg_list] ")"
+// `::Method()` — calls an instance method with the current `this`
+method_call  : "::" NAME "(" [arg_list] ")"
+// `super::Method()` — calls the parent implementation
+super_call   : "super" "::" NAME "(" [arg_list] ")"
+             | "super" "::" "constructor" "(" [arg_list] ")" -> super_constructor_call
+// `.Method()` — calls a static method of the current class
+static_ref   : "." NAME
 
 arg_list     : expr ("," expr)*
 

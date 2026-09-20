@@ -42,6 +42,30 @@ class KoskriptTransformer(Transformer):
     def bool_false(self, tree): return BoolLit(value=False)
     def null_lit(self, tree): return NullLit(value=None)
 
+    def this_ref(self, tree): return ThisRef()
+
+    def new_expr(self, tree):
+        name = tree[0]
+        args = tree[1] if len(tree) > 1 else []
+        return NewExpr(class_name=name.name, args=args)
+
+    def method_call(self, tree):
+        name = tree[0]
+        args = tree[1] if len(tree) > 1 else []
+        return MethodCall(name=name.name, args=args)
+
+    def super_call(self, tree):
+        name = tree[0]
+        args = tree[1] if len(tree) > 1 else []
+        return SuperCall(name=name.name, args=args)
+
+    def super_constructor_call(self, tree):
+        args = tree[0] if tree else []
+        return SuperCall(name="constructor", args=args)
+
+    def static_ref(self, tree):
+        return StaticRef(name=tree[0].name)
+
     def lambda_fn(self, tree):
         return LambdaFnDef(params=[], body=tree[0])
 
@@ -178,6 +202,101 @@ class KoskriptTransformer(Transformer):
             params=[],
             body=block
         )
+
+    def const_decl(self, tree):
+        name, expr = tree
+        return ConstDecl(name=name.name, value=expr)
+
+    # modifiers
+    def mod_static(self, tree): return "static"
+    def mod_public(self, tree): return "public"
+    def mod_private(self, tree): return "private"
+
+    @staticmethod
+    def _split_modifiers(tree):
+        modifiers, rest = [], []
+        for item in tree:
+            (modifiers if isinstance(item, str) else rest).append(item)
+        return modifiers, rest
+
+    # classes
+    def class_body(self, tree):
+        return list(tree)
+
+    def class_def_simple(self, tree):
+        name = tree[0]
+        body = tree[1] if len(tree) > 1 else []
+        return self._build_class(name.name, None, body)
+
+    def class_def_extends(self, tree):
+        name, parent = tree[0], tree[1]
+        body = tree[2] if len(tree) > 2 else []
+        return self._build_class(name.name, parent.name, body)
+
+    @staticmethod
+    def _build_class(name, parent, members):
+        fields, methods, constructors = [], [], []
+        for member in members:
+            if isinstance(member, ClassField):
+                fields.append(member)
+            elif isinstance(member, ClassMethod):
+                if member.is_constructor:
+                    constructors.append(member)
+                else:
+                    methods.append(member)
+        return ClassDef(
+            name=name,
+            parent=parent,
+            fields=fields,
+            methods=methods,
+            constructors=constructors
+        )
+
+    def field_decl(self, tree):
+        modifiers, rest = self._split_modifiers(tree)
+        name, value = rest
+        return ClassField(name=name.name, value=value, modifiers=modifiers)
+
+    def method_def_args(self, tree):
+        modifiers, rest = self._split_modifiers(tree)
+        name, params, block = rest
+        return ClassMethod(
+            name=name.name, params=params, body=block,
+            modifiers=modifiers, is_constructor=False
+        )
+
+    def method_def_nargs(self, tree):
+        modifiers, rest = self._split_modifiers(tree)
+        name, block = rest
+        return ClassMethod(
+            name=name.name, params=[], body=block,
+            modifiers=modifiers, is_constructor=False
+        )
+
+    def constructor_def_args(self, tree):
+        modifiers, rest = self._split_modifiers(tree)
+        params, block = rest
+        return ClassMethod(
+            name="constructor", params=params, body=block,
+            modifiers=modifiers, is_constructor=True
+        )
+
+    def constructor_def_nargs(self, tree):
+        modifiers, rest = self._split_modifiers(tree)
+        block = rest[0]
+        return ClassMethod(
+            name="constructor", params=[], body=block,
+            modifiers=modifiers, is_constructor=True
+        )
+
+    def member_assign(self, tree):
+        target, attr, value = tree
+        return MemberAssign(target=target, attr=attr.name, value=value)
+
+    def bound_method_call(self, tree):
+        target, name = tree[0], tree[1]
+        args = tree[2] if len(tree) > 2 else []
+        return BoundMethodCall(target=target, name=name.name, args=args)
 
     # flow
     def return_value(self, tree):

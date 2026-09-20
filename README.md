@@ -12,6 +12,8 @@ Koskript is a simple, embeddable, and lightweight scripting language designed to
 
 - Dynamic typing.
 - Block-level lexical scoping with `local` declarations
+- Constants with `const`
+- Classes with inheritance, visibility, static methods and constructors
 - Native Python interop via `KoskriptObject`
 - `if`, `elseif`, `else`
 - `while`, `for`, `foreach` loops with `break` / `continue`
@@ -131,6 +133,19 @@ local config = { "debug": true, "version": 1 }
 
 Variables declared with `local` are scoped to the block they are declared in — including `if`, `while`, `for` and `foreach` bodies.
 
+### Constants
+
+`const` declares a read-only binding in the current scope. Reassigning it raises a `ProtectedObject` error, but the contents of an `array` or `map` can still be modified:
+
+```koskript
+const PI = 3.14
+const CONFIG = { "debug": true }
+
+CONFIG.debug = false   // ok, the binding is constant, not the contents
+
+PI = 3.0               // error: cannot modify a constant value
+```
+
 ### Functions
 
 ```koskript
@@ -193,6 +208,81 @@ print(add(1, 2))
 // invoke a lambda literal directly
 print((() { return 42 })())
 ```
+
+### Classes
+
+Classes support single inheritance, visibility modifiers, static methods and constructors:
+
+```koskript
+class Animal {
+    public name = "generic"     // fields can be public or private
+    private energy = 100
+
+    constructor(name) {
+        this.name = name
+    }
+
+    public fn speak() {
+        return "..."
+    }
+
+    public fn describe() {
+        return ::speak() + " " + this.name   // :: calls an instance method
+    }
+
+    private fn drain() {
+        this.energy = this.energy - 10
+    }
+
+    static fn kingdom() {
+        return "animalia"                     // static methods have no `this`
+    }
+}
+
+class Dog extends Animal {
+    constructor(name) {
+        super::constructor(name)              // parent constructor
+    }
+
+    public fn speak() {
+        return "woof"                         // overrides Animal.speak
+    }
+
+    public fn parent_speak() {
+        return super::speak()                 // parent implementation
+    }
+}
+
+const rex = new Dog("Rex")
+
+print(rex.describe())      // woof Rex (dynamic dispatch)
+print(rex::describe())     // same, called with `::` from outside
+print(rex.parent_speak())  // ...
+print(Dog.kingdom())       // animalia
+print(Dog::kingdom())      // static call with `::` from outside
+```
+
+Rules:
+
+| Syntax | Meaning |
+|--------|---------|
+| `public fn` / `private fn` | Instance method. `public` is the default. |
+| `static fn` | Static method. Called as `.Method()` inside the class or `Class.Method()` outside. |
+| `public x = value` / `private x = value` | Instance field with a default value. `public` is the default. |
+| `constructor(params) { }` | Runs on `new Class(args)`. |
+| `this.field` | Field access inside instance methods. |
+| `::Method()` | Calls an instance method with the current `this` (dynamic dispatch). |
+| `.Method()` | Calls a static method of the current class. |
+| `instance::Method()` | Calls a method from outside, binding `this` to that instance. |
+| `Class::StaticMethod()` | Calls a static method from outside. |
+| `super::Method()` | Calls the parent implementation. |
+| `super::constructor(args)` | Calls the parent constructor (only inside a constructor). |
+| `new Class(args)` | Expression that creates an instance. |
+
+- Private members are only accessible from methods of the class that defines them; they are not inherited.
+- A subclass cannot redeclare an inherited field, or change a method between static and instance.
+- If a class defines no constructor, the nearest inherited constructor is used.
+- Fields are initialized (parent first) before the constructor runs.
 
 ### Loops
 
@@ -268,7 +358,7 @@ print("line one\nline two")
 
 The following words cannot be used as identifiers:
 
-`if` `elseif` `else` `while` `for` `foreach` `fn` `return` `local` `true` `false` `null` `and` `or` `not` `in` `break` `continue`
+`if` `elseif` `else` `while` `for` `foreach` `fn` `return` `local` `const` `true` `false` `null` `and` `or` `not` `in` `break` `continue` `class` `extends` `new` `static` `public` `private` `this` `super` `constructor`
 
 ### Python Interop
 
