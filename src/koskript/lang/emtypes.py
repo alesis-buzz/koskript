@@ -12,7 +12,7 @@ ArrayLit = namedtuple("ArrayLit", ["value"])
 MapLit = namedtuple("MapLit", ["value"])
 MapValue = namedtuple("MapValue", ["key", "value"])
 NameRef = namedtuple("NameRef", ["name"])
-Function = namedtuple("Function", ["params", "body"])
+Function = namedtuple("Function", ["params", "body", "closure", "frame"])
 MemberAccess = namedtuple("MemberAccess", ["name", "attrs"])
 IndexAccess = namedtuple("IndexAccess", ["value", "index"])
 
@@ -111,6 +111,7 @@ class MethodInfo(object):
         self.static = static
         self.is_constructor = is_constructor
         self.defining_class = None
+        self.closure = None
 
     def __repr__(self):
         kind = "constructor" if self.is_constructor else ("static method" if self.static else "method")
@@ -139,6 +140,7 @@ class KoskriptClass(object):
         self.fields = {}
         self.methods = {}
         self.constructor: MethodInfo | None = None
+        self.closure = None
 
     def mro(self) -> list:
         chain, klass = [], self

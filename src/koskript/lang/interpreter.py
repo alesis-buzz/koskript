@@ -6,6 +6,7 @@ class KoskriptInterpreter(object):
     def __init__(self):
         self.globals = {"_": {}}
         self.scopes = []
+        self.scope_parents = {}
         self.method_frames = []
         self._scope_counter = 0
         self._handlers = {
@@ -43,22 +44,28 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(f"'{signal}' outside of a loop")
 
     def execute_block(self, body: list):
-        self._push_scope("block")
+        self._push_scope("block", self._current_scope())
         try:
             self.execute(body)
         finally:
             self.scopes.pop()
 
-    def _push_scope(self, prefix: str) -> str:
+    def _current_scope(self) -> str:
+        return self.scopes[-1] if self.scopes else "_"
+
+    def _push_scope(self, prefix: str, parent: str) -> str:
         self._scope_counter += 1
         scope = f"{prefix}_{self._scope_counter}"
+        self.scope_parents[scope] = parent
         self.scopes.append(scope)
         return scope
 
     def get_global(self, name: str) -> KoskriptObject:
-        for scope in reversed(self.scopes):
+        scope = self._current_scope()
+        while scope is not None:
             if scope in self.globals and name in self.globals[scope]:
                 return self.globals[scope][name]
+            scope = self.scope_parents.get(scope)
         
         if name in self.globals["_"]:
             return self.globals["_"][name]
@@ -157,7 +164,9 @@ class KoskriptInterpreter(object):
                         f"cannot index {type(container).__name__} with {key!r}")
 
             case FnCall(n, arg): return self.fn_eval(n, arg)
-            case LambdaFnDef(p, body): return Function(params=p, body=body)
+            case LambdaFnDef(p, body): return Function(
+                params=p, body=body,
+                closure=self._current_scope(), frame=self._current_frame())
             case EquComp() | NequComp() | LteComp() | GteComp() | GtComp() | LtComp() \
                | AndCond() | OrCond() | NotCond():
                 return self.cond_eval(expr)
@@ -190,10 +199,14 @@ class KoskriptInterpreter(object):
         func_body = value.body
         if type(func_body) != list: func_body = [func_body]
 
-        self._push_scope(f"func_{callee}")
-        self.method_frames.append(Frame(instance=None, klass=None, info=None))
+        arg_values = [self.expr_eval(arg) for arg in args]
+
+        self._push_scope(f"func_{callee}", value.closure)
+        self.method_frames.append(
+            value.frame if value.frame is not None
+            else Frame(instance=None, klass=None, info=None))
         try:
-            self._bind_params(func_params, args)
+            self._bind_params(func_params, arg_values)
             self.execute(func_body)
         except (BreakSignal, ContinueSignal) as signal:
             raise Errors.RuntimeError(f"'{signal}' outside of a loop")
@@ -209,24 +222,26 @@ class KoskriptInterpreter(object):
     def _current_frame(self):
         return self.method_frames[-1] if self.method_frames else None
 
-    def _bind_params(self, params: list, args: list):
+    def _bind_params(self, params: list, values: list):
         for index_param, param in enumerate(params):
             try:
                 self.set_global(
                     name=param,
                     value=KoskriptObject(
-                        self.expr_eval(args[index_param]),
+                        values[index_param],
                         read_only=True)
                 )
             except IndexError:
                 break
 
     def _invoke_method(self, info: MethodInfo, instance, args: list):
-        self._push_scope(f"method_{info.name}")
+        arg_values = [self.expr_eval(arg) for arg in args]
+
+        self._push_scope(f"method_{info.name}", info.closure)
         self.method_frames.append(
             Frame(instance=instance, klass=info.defining_class, info=info))
         try:
-            self._bind_params(info.params, args)
+            self._bind_params(info.params, arg_values)
             try:
                 self.execute(info.body)
             except ReturnSignal as signal:
@@ -243,7 +258,7 @@ class KoskriptInterpreter(object):
 
         for defining_class in klass.mro():
             for name, field in defining_class.fields.items():
-                self._push_scope("class_fields")
+                self._push_scope("class_fields", defining_class.closure)
                 self.method_frames.append(
                     Frame(instance=instance, klass=defining_class, info=None))
                 try:
@@ -521,6 +536,7 @@ class KoskriptInterpreter(object):
             parent = parent_value
 
         klass = KoskriptClass(name=node.name, parent=parent)
+        klass.closure = self._current_scope()
 
         for field in node.fields:
             info = FieldInfo(field.name, field.value, field.modifiers)
@@ -565,6 +581,7 @@ class KoskriptInterpreter(object):
                         f"with a {'static' if info.static else 'instance'} method")
 
             info.defining_class = klass
+            info.closure = klass.closure
             klass.methods[info.name] = info
 
         if len(node.constructors) > 1:
@@ -582,6 +599,7 @@ class KoskriptInterpreter(object):
                 raise Errors.RuntimeError("a constructor cannot be static")
 
             constructor.defining_class = klass
+            constructor.closure = klass.closure
             klass.constructor = constructor
 
         self.set_global(node.name, KoskriptObject(value=klass))
@@ -601,7 +619,9 @@ class KoskriptInterpreter(object):
             value=KoskriptObject(
                 value=Function(
                 params=node.params,
-                body=node.body
+                body=node.body,
+                closure=self._current_scope(),
+                frame=self._current_frame()
             ))
         )
 
@@ -629,7 +649,7 @@ class KoskriptInterpreter(object):
                 and not hasattr(array_value, "__iter__"):
             raise Errors.MismatchType(f"for statement only supports maps, arrays or iterable objects.")
 
-        self._push_scope(f"for")
+        self._push_scope(f"for", self._current_scope())
         try:
             var = KoskriptObject(None)
             var.read_only = True
@@ -653,7 +673,7 @@ class KoskriptInterpreter(object):
         if type(map_value) != dict and not hasattr(map_value, "items"):
             raise Errors.MismatchType(f"foreach statement only supports maps.")
 
-        self._push_scope(f"foreach")
+        self._push_scope(f"foreach", self._current_scope())
         try:
             keyvalue = KoskriptObject(None)
             varvalue = KoskriptObject(None)
