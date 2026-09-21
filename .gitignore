@@ -22,6 +22,7 @@ var/
 wheels/
 tests.py
 benchmark.py
+tests/
 share/python-wheels/
 *.egg-info/
 .installed.cfg

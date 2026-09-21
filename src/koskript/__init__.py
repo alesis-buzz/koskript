@@ -4,6 +4,7 @@ from .lang.emtypes import KoskriptObject
 from .lang.interpreter import KoskriptInterpreter
 from .lang.astgen import KoskriptTransformer
 from .lang.errors import Errors
+from .stdlib import build_globals
 import pathlib, os
 
 _grammar_path = os.path.join(pathlib.Path(__file__).resolve().parent, "grammar.lark")
@@ -35,6 +36,10 @@ def _format_syntax_error(code: str, error: LarkError) -> str:
 class KoskriptRuntime(object):
     """Embeddable Koskript runtime.
 
+    The standard library is registered by default. Host globals are registered
+    after it, so any of them can override a standard library name. Pass
+    ``stdlib=False`` to skip the standard library entirely.
+
     Any Python value or callable exposed to scripts is wrapped automatically,
     so you can pass plain functions without building ``KoskriptObject`` by hand.
 
@@ -43,13 +48,16 @@ class KoskriptRuntime(object):
     36
     """
 
-    def __init__(self, globals_map=None, _globals_=None):
+    def __init__(self, globals_map=None, _globals_=None, stdlib=True):
         if _globals_ is not None:
             globals_map = {**(globals_map or {}), **_globals_}
 
         self.globals = {}
         self.__interpreter__ = KoskriptInterpreter()
         self.__ast__ = KoskriptTransformer()
+
+        if stdlib:
+            self.register_many(build_globals())
 
         if globals_map:
             self.register_many(globals_map)
@@ -95,15 +103,15 @@ class KoskriptRuntime(object):
         return self.__interpreter__.run(ast)
 
 
-def run(code: str, globals_map: dict = None, **kwargs):
+def run(code: str, globals_map: dict = None, stdlib: bool = True, **kwargs):
     """One-shot convenience helper.
 
-    >>> run("print(1 + 2)", print=print)
+    >>> run("return 1 + 2")
     3
     """
     merged = dict(globals_map or {})
     merged.update(kwargs)
-    return KoskriptRuntime(merged).execute(code)
+    return KoskriptRuntime(merged, stdlib=stdlib).execute(code)
 
 
-__all__ = ["KoskriptRuntime", "KoskriptObject", "Errors", "run"]
+__all__ = ["KoskriptRuntime", "KoskriptObject", "Errors", "run", "build_globals"]
