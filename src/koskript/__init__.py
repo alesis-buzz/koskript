@@ -57,7 +57,7 @@ class KoskriptRuntime(object):
         self.__ast__ = KoskriptTransformer()
 
         if stdlib:
-            self.register_many(build_globals())
+            self.register_many(build_globals(self.__interpreter__.call_value))
 
         if globals_map:
             self.register_many(globals_map)

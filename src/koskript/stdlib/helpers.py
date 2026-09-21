@@ -57,3 +57,17 @@ def expect_type(name: str, value, expected_type, description: str):
         raise Errors.MismatchType(
             f"{name}() expected {description}, got {type_name(value)}")
     return value
+
+
+def expect_int(name: str, value):
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise Errors.MismatchType(
+            f"{name}() expected an int, got {type_name(value)}")
+    return value
+
+
+def expect_number(name: str, value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise Errors.MismatchType(
+            f"{name}() expected a number, got {type_name(value)}")
+    return value

@@ -179,34 +179,41 @@ class KoskriptInterpreter(object):
         else:
             value = self.expr_eval(callee)
 
+        if isinstance(value, KoskriptObject):
+            value = value.value
+
+        return self.call_value(value, [self.expr_eval(arg) for arg in args])
+
+    def call_value(self, value, values: list):
+        """Invoke a Koskript or Python callable with already evaluated values."""
+        if isinstance(value, KoskriptObject):
+            value = value.value
+
         if isinstance(value, BoundMethod):
-            return self._invoke_method(value.info, value.instance, args)
+            return self._invoke_method_values(value.info, value.instance, values)
 
         if isinstance(value, KoskriptClass):
             raise Errors.RuntimeError(
                 f"class '{value.name}' is not callable, use 'new {value.name}()'")
 
-        if isinstance(value, KoskriptObject):
-            value = value.value
+        if isinstance(value, Function):
+            return self._call_function(value, values)
 
         if callable(value):
-            return value(*[self.expr_eval(arg) for arg in args])
+            return value(*values)
 
-        if type(value) != Function:
-            raise Errors.MismatchType(f"{callee} is not callable.")
-        
-        func_params = value.params
-        func_body = value.body
+        raise Errors.MismatchType(f"{type(value).__name__} is not callable")
+
+    def _call_function(self, func: Function, values: list):
+        func_body = func.body
         if type(func_body) != list: func_body = [func_body]
 
-        arg_values = [self.expr_eval(arg) for arg in args]
-
-        self._push_scope(f"func_{callee}", value.closure)
+        self._push_scope("function", func.closure)
         self.method_frames.append(
-            value.frame if value.frame is not None
+            func.frame if func.frame is not None
             else Frame(instance=None, klass=None, info=None))
         try:
-            self._bind_params(func_params, arg_values)
+            self._bind_params(func.params, values)
             self.execute(func_body)
         except (BreakSignal, ContinueSignal) as signal:
             raise Errors.RuntimeError(f"'{signal}' outside of a loop")
@@ -235,13 +242,15 @@ class KoskriptInterpreter(object):
                 break
 
     def _invoke_method(self, info: MethodInfo, instance, args: list):
-        arg_values = [self.expr_eval(arg) for arg in args]
+        return self._invoke_method_values(
+            info, instance, [self.expr_eval(arg) for arg in args])
 
+    def _invoke_method_values(self, info: MethodInfo, instance, values: list):
         self._push_scope(f"method_{info.name}", info.closure)
         self.method_frames.append(
             Frame(instance=instance, klass=info.defining_class, info=info))
         try:
-            self._bind_params(info.params, arg_values)
+            self._bind_params(info.params, values)
             try:
                 self.execute(info.body)
             except ReturnSignal as signal:
