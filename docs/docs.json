@@ -1,0 +1,34 @@
+{
+  "name": "Koskript",
+  "theme": "dark",
+  "sections": [
+    {
+      "type": "section",
+      "name": "Guides",
+      "pages": [
+        { "type": "page", "name": "Overview", "md_url": "index.md" },
+        { "type": "page", "name": "Getting started", "md_url": "getting-started.md" },
+        { "type": "page", "name": "Embedding guide", "md_url": "embedding.md" }
+      ]
+    },
+    {
+      "type": "section",
+      "name": "Reference",
+      "pages": [
+        { "type": "page", "name": "Language", "md_url": "language.md" },
+        { "type": "page", "name": "Classes", "md_url": "classes.md" },
+        { "type": "page", "name": "Standard library", "md_url": "standard-library.md" },
+        { "type": "page", "name": "Python interop", "md_url": "python-interop.md" }
+      ]
+    },
+    {
+      "type": "section",
+      "name": "Project",
+      "pages": [
+        { "type": "page", "name": "Roadmap", "md_url": "roadmap.md" },
+        { "type": "link", "name": "GitHub", "url": "https://github.com/alesis-buzz/koskript" },
+        { "type": "link", "name": "PyPI", "url": "https://pypi.org/project/koskript/" }
+      ]
+    }
+  ]
+}
