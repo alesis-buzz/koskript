@@ -1,6 +1,7 @@
 {
   "name": "Koskript",
-  "theme": "dark",
+  "primary": "#00b6ff",
+  "theme": "light",
   "sections": [
     {
       "type": "section",
