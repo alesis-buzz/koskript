@@ -21,6 +21,7 @@ sdist/
 var/
 wheels/
 tests.py
+benchmark.py
 share/python-wheels/
 *.egg-info/
 .installed.cfg
