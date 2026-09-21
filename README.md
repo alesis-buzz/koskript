@@ -209,6 +209,25 @@ print(add(1, 2))
 print((() { return 42 })())
 ```
 
+Lambdas and nested functions capture the scope where they are defined, so they keep local state after the enclosing function returns:
+
+```koskript
+fn counter() {
+    local n = 0
+    return () {
+        n = n + 1
+        return n
+    }
+}
+
+const next = counter()
+
+print(next())   // 1
+print(next())   // 2
+```
+
+Inside a method, closures also capture `this`, so they can use fields, private members and `::Method()`.
+
 ### Classes
 
 Classes support single inheritance, visibility modifiers, static methods and constructors:
