@@ -1,3 +1,5 @@
+import inspect
+
 from .emtypes import *
 
 class KoskriptInterpreter(object):
@@ -124,10 +126,13 @@ class KoskriptInterpreter(object):
             case NewExpr(class_name, args):
                 target = self.get_global(class_name).value
 
-                if not isinstance(target, KoskriptClass):
-                    raise Errors.RuntimeError(f"'{class_name}' is not a class")
+                if isinstance(target, KoskriptClass):
+                    return self._instantiate(target, args)
 
-                return self._instantiate(target, args)
+                if inspect.isclass(target):
+                    return target(*[self.expr_eval(arg) for arg in args])
+
+                raise Errors.RuntimeError(f"'{class_name}' is not a class")
 
             case MethodCall(name, args):
                 return self._method_call(name, args)
@@ -313,8 +318,13 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(
                 f"'{name}' is an instance method, call it on an instance of '{container.name}'")
 
-        raise Errors.MismatchType(
-            f"'::' can only be used on an instance or a class, got {type(container).__name__}")
+        method = self._python_getattr(container, name)
+
+        if not callable(method):
+            raise Errors.RuntimeError(
+                f"'{name}' is not a method of {type(container).__name__}")
+
+        return method(*[self.expr_eval(arg) for arg in args])
 
     def _super_call(self, name: str, args: list):
         frame = self._current_frame()
@@ -412,8 +422,21 @@ class KoskriptInterpreter(object):
             self._check_private(info, info.defining_class)
             return BoundMethod(None, info)
 
-        raise Errors.MismatchType(
-            f"member access only supported on map, instance or class, got {type(container).__name__}")
+        if container is None:
+            raise Errors.MismatchType("cannot access members on null")
+
+        return self._python_getattr(container, attr)
+
+    def _python_getattr(self, container, attr: str):
+        if attr.startswith("__") and attr.endswith("__"):
+            raise Errors.RuntimeError(
+                f"access to dunder attribute '{attr}' is not allowed")
+
+        try:
+            return getattr(container, attr)
+        except AttributeError:
+            raise Errors.RuntimeError(
+                f"'{attr}' is not defined on {type(container).__name__}")
 
     def _member_set(self, container, attr: str, value):
         if isinstance(container, dict):
@@ -431,8 +454,18 @@ class KoskriptInterpreter(object):
             container.fields[attr] = value
             return
 
-        raise Errors.MismatchType(
-            f"cannot assign member on {type(container).__name__}")
+        if container is None:
+            raise Errors.MismatchType("cannot assign members on null")
+
+        if attr.startswith("__") and attr.endswith("__"):
+            raise Errors.RuntimeError(
+                f"access to dunder attribute '{attr}' is not allowed")
+
+        try:
+            setattr(container, attr, value)
+        except AttributeError:
+            raise Errors.MismatchType(
+                f"cannot assign member on {type(container).__name__}")
 
 
     def cond_eval(self, condition):
@@ -592,8 +625,9 @@ class KoskriptInterpreter(object):
     def _for_stmt(self, node: ForStmt):
         array_value = self.expr_eval(node.iterable)
 
-        if type(array_value) != list and type(array_value) != dict:
-            raise Errors.MismatchType(f"for statement only supports maps or arrays.")
+        if type(array_value) != list and type(array_value) != dict \
+                and not hasattr(array_value, "__iter__"):
+            raise Errors.MismatchType(f"for statement only supports maps, arrays or iterable objects.")
 
         self._push_scope(f"for")
         try:
@@ -616,7 +650,7 @@ class KoskriptInterpreter(object):
     def _foritem_stmt(self, node: ForItemStmt):
         map_value = self.expr_eval(node.iterable)
 
-        if type(map_value) != dict:
+        if type(map_value) != dict and not hasattr(map_value, "items"):
             raise Errors.MismatchType(f"foreach statement only supports maps.")
 
         self._push_scope(f"foreach")

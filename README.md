@@ -376,6 +376,28 @@ runtime.register("sqrt", math.sqrt)
 runtime["now"] = time.time
 ```
 
+Python classes are supported too — scripts can instantiate them with `new` and access their attributes and methods:
+
+```python
+class Counter:
+    def __init__(self, start=0):
+        self.count = start
+
+    def bump(self, n=1):
+        self.count += n
+        return self.count
+
+runtime = KoskriptRuntime({"print": print, "Counter": Counter})
+runtime.execute("""
+const counter = new Counter(5)
+print(counter.count)      // 5
+print(counter.bump())     // 6
+counter.count = 10
+""")
+```
+
+Instances returned by registered functions work the same way. Dunder attributes (`__x__`) are blocked, and a Koskript class cannot `extends` a Python class.
+
 ### Embedding API
 
 `execute()` returns the value of the last evaluated expression, or the value of a top-level `return`:
