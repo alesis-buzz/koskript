@@ -7,6 +7,8 @@ applications. It features dynamic typing, lexical scoping, closures, classes and
 native Python interop — letting you expose any Python function or object
 directly to your scripts.
 
+See the documentation [here](https://koskript.alesis.buzz)
+
 ```python
 from koskript import KoskriptRuntime
 
