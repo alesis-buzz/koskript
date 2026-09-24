@@ -14,6 +14,7 @@ and the known limitations.
 - Classes: inheritance, visibility, static methods, constructors, `super`
 - Python interop: values, callables, objects and classes (dunder attributes are blocked)
 - [Standard library](standard-library.md): core builtins plus `map`, `array`, `string`, `math` and `json`
+- Compiled execution engine (AST to Python code) with lexical slot resolution
 - PyPI package
 
 ## Next
@@ -29,7 +30,7 @@ and the known limitations.
   as `Errors.RuntimeError`.
 - Fix the newline/call chaining ambiguity: a line starting with `(` after a call
   is parsed as a chained call.
-- A committed test suite and CI (tests currently live outside version control).
+- A CI pipeline running the committed test suite.
 
 ## Later
 
@@ -42,10 +43,13 @@ and the known limitations.
 
 ## Performance
 
-Koskript walks an AST from Python, so it is roughly 90-200x slower than
-equivalent CPython code depending on the workload. Function calls, member
-access and object creation are the most expensive operations; parse time is
-negligible compared to execution.
+Koskript compiles the AST into Python functions instead of walking the tree:
+statements become real Python loops/branches, expressions are inlined, and
+every lexical scope is resolved to numeric slots. Compared to the original
+tree-walking interpreter this is roughly **8-30x faster** depending on the
+workload; on `benchmark.py` the interpreter now runs between **4x and 24x**
+slower than equivalent CPython code (it used to be 90-200x).
 
-Work plan: interpreter micro-optimizations (scope handling and member access),
-then a custom parser, and a bytecode VM in the long term.
+Remaining hot spots are object/class heavy code (member access, method
+dispatch), so the work plan is: inline caches for member access, a custom
+parser to replace Lark, and a bytecode VM in the long term.

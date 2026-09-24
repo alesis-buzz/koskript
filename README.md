@@ -19,9 +19,8 @@ array.each(names, (name) { print("hello " + name) })
 """)
 ```
 
-> **NOTE:** Koskript is in early development. Module imports, error handling and
-> performance improvements are on the way; expect the language and API to change
-> between releases.
+> **NOTE:** Koskript is in early development. Module imports and error handling
+> are on the way; expect the language and API to change between releases.
 
 ---
 

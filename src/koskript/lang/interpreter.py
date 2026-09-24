@@ -1,203 +1,99 @@
 import inspect
 
 from .emtypes import *
+from .errors import Errors
+from .compiler import Compiler
+
 
 class KoskriptInterpreter(object):
+    """Runs Koskript programs.
+
+    The AST is compiled to Python closures by :class:`~.compiler.Compiler`;
+    each scope keeps its values in a flat list of slots, so variable access is
+    a list index instead of a chain of string-keyed dictionaries.
+    """
+
     def __init__(self):
-        self.globals = {"_": {}}
-        self.scopes = []
-        self.scope_parents = {}
+        self.globals = {}
         self.method_frames = []
-        self._scope_counter = 0
-        self._handlers = {
-            LocalDecl:   self._local_decl,
-            ConstDecl:   self._const_decl,
-            DeclStmt: self._decl,
-            MemberAssign: self._member_assign,
-            ClassDef:    self._class_def,
-            FnDef:       self._fn_def,
-            FnCall:      self._fn_call,
-            ReturnStmt:  self._return_stmt,
-            WhileStmt:   self._while_stmt,
-            ForStmt:     self._for_stmt,
-            ForItemStmt: self._foritem_stmt,
-            BreakStmt:    self._break_stmt,
-            ContinueStmt: self._continue_stmt,
-            IfStmt: self._if_stmt,
-            ElseIfStmt: self._else_if_stmt,
-            ElseStmt: self._else_stmt
-        }
-    
+        self.root_info = ScopeInfo(None)
+        self.root = Scope(None, self.root_info)
+        self.compiler = Compiler(self)
+
+    # ENTRY POINTS ##############################################################
+
     def execute(self, ast: list):
-        result = None
-        for node in ast:
-            result = self.visit(node)
-        return result
+        if type(ast) is not list:
+            ast = [ast]
+        chunk = self.compiler.compile_chunk(ast)
+        self._sync_root()
+        return chunk(self.root)
 
     def run(self, ast: list):
         # Entry point: a top-level `return` stops execution and yields its value.
+        if type(ast) is not list:
+            ast = [ast]
+        chunk = self.compiler.compile_chunk(ast)
+        self._sync_root()
         try:
-            return self.execute(ast)
+            return chunk(self.root)
         except ReturnSignal as signal:
             return signal.value
         except (BreakSignal, ContinueSignal) as signal:
             raise Errors.RuntimeError(f"'{signal}' outside of a loop")
 
-    def execute_block(self, body: list):
-        self._push_scope("block", self._current_scope())
-        try:
-            self.execute(body)
-        finally:
-            self.scopes.pop()
+    def _sync_root(self):
+        values = self.root.values
+        meta = self.root_info
+        missing = len(meta.names) - len(values)
+        if missing > 0:
+            values.extend([UNBOUND] * missing)
 
-    def _current_scope(self) -> str:
-        return self.scopes[-1] if self.scopes else "_"
-
-    def _push_scope(self, prefix: str, parent: str) -> str:
-        self._scope_counter += 1
-        scope = f"{prefix}_{self._scope_counter}"
-        self.scope_parents[scope] = parent
-        self.scopes.append(scope)
-        return scope
+    # VARIABLES #################################################################
 
     def get_global(self, name: str) -> KoskriptObject:
-        scope = self._current_scope()
-        while scope is not None:
-            if scope in self.globals and name in self.globals[scope]:
-                return self.globals[scope][name]
-            scope = self.scope_parents.get(scope)
-        
-        if name in self.globals["_"]:
-            return self.globals["_"][name]
-        
-        raise Errors.NameError(f"'{name}' is not defined")
+        info = self.root_info
+        index = info.names.get(name)
+        if index is None or self.root.values[index] is UNBOUND:
+            raise Errors.NameError(f"'{name}' is not defined")
+        return KoskriptObject(
+            self.root.values[index], index in info.readonly)
 
-    def set_global(self, name: str, value: KoskriptObject) -> None:
-        if self.scopes:
-            scope = self.scopes[-1]
-            if scope not in self.globals:
-                self.globals[scope] = {}
-            self.globals[scope][name] = value
-            return
-        
-        self.globals["_"][name] = value
-
-    def visit(self, node):
-        handler = self._handlers.get(type(node))
-        if handler is None:
-            # Statements can also be bare expressions (e.g. `f(x)`, `1 + 2`).
-            return self.expr_eval(node)
-        return handler(node)
-
-    # EVALUATORS ####################################################################
-
-    def expr_eval(self, expr):
-        match expr:
-            case IntLit(value):  return value
-            case FloatLit(value): return value
-            case StrLit(value):  return value
-            case BoolLit(value): return value
-            case NullLit(value): return value
-            case NameRef(name):  return self.get_global(name).value
-            case AddStmt(l, r):  return self.expr_eval(l) + self.expr_eval(r)
-            case SubStmt(l, r):  return self.expr_eval(l) - self.expr_eval(r)
-            case MulStmt(l, r):  return self.expr_eval(l) * self.expr_eval(r)
-            case DivStmt(l, r):  return self.expr_eval(l) / self.expr_eval(r)
-            case ModStmt(l, r):  return self.expr_eval(l) % self.expr_eval(r)
-            case NegStmt(v):     return -self.expr_eval(v)
-            case ArrayLit(array): return [self.expr_eval(i) for i in array]
-
-            case MapValue(key, value): return key, value
-            case MapLit(values):
-                res = {}
-                for val in values:
-                    res[self.expr_eval(val.key)] = self.expr_eval(val.value)
-                return res
-
-            case MemberAccess(name, attrs):
-                value = self.expr_eval(name)
-
-                for attr in attrs:
-                    value = self._member_get(value, attr.name)
-
-                return value
-
-            case ThisRef():
-                frame = self._current_frame()
-
-                if frame is None or frame.instance is None:
-                    raise Errors.RuntimeError("'this' can only be used inside an instance method")
-
-                return frame.instance
-
-            case NewExpr(class_name, args):
-                target = self.get_global(class_name).value
-
-                if isinstance(target, KoskriptClass):
-                    return self._instantiate(target, args)
-
-                if inspect.isclass(target):
-                    return target(*[self.expr_eval(arg) for arg in args])
-
-                raise Errors.RuntimeError(f"'{class_name}' is not a class")
-
-            case MethodCall(name, args):
-                return self._method_call(name, args)
-
-            case BoundMethodCall(target, name, args):
-                return self._bound_method_call(target, name, args)
-
-            case SuperCall(name, args):
-                return self._super_call(name, args)
-
-            case StaticRef(name):
-                return self._static_ref(name)
-
-            case IndexAccess(value, index):
-                container = self.expr_eval(value)
-                key = self.expr_eval(index)
-
-                try:
-                    return container[key]
-                except (KeyError, IndexError, TypeError):
-                    raise Errors.RuntimeError(
-                        f"cannot index {type(container).__name__} with {key!r}")
-
-            case FnCall(n, arg): return self.fn_eval(n, arg)
-            case LambdaFnDef(p, body): return Function(
-                params=p, body=body,
-                closure=self._current_scope(), frame=self._current_frame())
-            case EquComp() | NequComp() | LteComp() | GteComp() | GtComp() | LtComp() \
-               | AndCond() | OrCond() | NotCond():
-                return self.cond_eval(expr)
-            case _: raise Errors.RuntimeError(f"Unknown expr: {type(expr).__name__}")
-
-    def fn_eval(self, callee, args):
-        if isinstance(callee, NameRef):
-            func: KoskriptObject = self.get_global(callee.name)
-            value = func.value
-        else:
-            value = self.expr_eval(callee)
-
-        if isinstance(value, KoskriptObject):
+    def set_global(self, name: str, value) -> None:
+        read_only = False
+        if type(value) is KoskriptObject:
+            read_only = value.read_only
             value = value.value
 
-        return self.call_value(value, [self.expr_eval(arg) for arg in args])
+        info = self.root_info
+        index = info.declare(name, read_only)
+        values = self.root.values
+        if index >= len(values):
+            values.extend([UNBOUND] * (index + 1 - len(values)))
+        values[index] = value
+        self.globals[name] = KoskriptObject(value, read_only)
+
+    # CALLS #####################################################################
 
     def call_value(self, value, values: list):
         """Invoke a Koskript or Python callable with already evaluated values."""
-        if isinstance(value, KoskriptObject):
-            value = value.value
+        kind = type(value)
 
-        if isinstance(value, BoundMethod):
+        if kind is Function:
+            frame = value.frame
+            if frame is None:
+                frame = EMPTY_FRAME
+            return value.code(self, value.closure, values, frame)
+
+        if kind is BoundMethod:
             return self._invoke_method_values(value.info, value.instance, values)
 
-        if isinstance(value, KoskriptClass):
+        if kind is KoskriptObject:
+            return self.call_value(value.value, values)
+
+        if kind is KoskriptClass:
             raise Errors.RuntimeError(
                 f"class '{value.name}' is not callable, use 'new {value.name}()'")
-
-        if isinstance(value, Function):
-            return self._call_function(value, values)
 
         if callable(value):
             return value(*values)
@@ -205,85 +101,187 @@ class KoskriptInterpreter(object):
         raise Errors.MismatchType(f"{type(value).__name__} is not callable")
 
     def _call_function(self, func: Function, values: list):
-        func_body = func.body
-        if type(func_body) != list: func_body = [func_body]
+        frame = func.frame
+        if frame is None:
+            frame = EMPTY_FRAME
+        return func.code(self, func.closure, values, frame)
 
-        self._push_scope("function", func.closure)
-        self.method_frames.append(
-            func.frame if func.frame is not None
-            else Frame(instance=None, klass=None, info=None))
-        try:
-            self._bind_params(func.params, values)
-            self.execute(func_body)
-        except (BreakSignal, ContinueSignal) as signal:
-            raise Errors.RuntimeError(f"'{signal}' outside of a loop")
-        except ReturnSignal as signal:
-            return signal.value
-        finally:
-            self.method_frames.pop()
-            self.scopes.pop()
-        return None
+    def call_member_values(self, container, name: str, values: list):
+        """Call ``container.name(values)`` without materializing a bound method."""
+        if type(container) is KoskriptInstance:
+            info = container.klass.find_method(name)
+            if info is not None:
+                if info.static:
+                    raise Errors.RuntimeError(
+                        f"'{name}' is static, call it as '{container.klass.name}.{name}()'")
+                self._check_private(info, info.defining_class)
+                return info.code(
+                    self, info.closure, values,
+                    Frame(instance=container, klass=info.defining_class, info=info))
 
-    # CLASSES #######################################################################
+            found = container.klass.find_field(name)
+            if found is None:
+                raise Errors.RuntimeError(
+                    f"'{name}' is not defined on '{container.klass.name}'")
+
+            defining_class, field = found
+            if field.visibility == "private":
+                self._check_private(field, defining_class)
+            return self.call_value(container.fields[field.slot], values)
+
+        return self.call_value(self._member_get(container, name), values)
+
+    def this_member_get(self, attr: str):
+        """Fast path for ``this.attr`` inside a method."""
+        frames = self.method_frames
+        if frames:
+            instance = frames[-1].instance
+            if instance is not None:
+                return self._member_get(instance, attr)
+        raise Errors.RuntimeError("'this' can only be used inside an instance method")
+
+    def this_member_set(self, attr: str, value):
+        """Fast path for ``this.attr = value`` inside a method."""
+        frames = self.method_frames
+        if frames:
+            instance = frames[-1].instance
+            if instance is not None:
+                self._member_set(instance, attr, value)
+                return
+        raise Errors.RuntimeError("'this' can only be used inside an instance method")
+
+    def _invoke_method_values(self, info: MethodInfo, instance, values: list):
+        return info.code(
+            self, info.closure, values,
+            Frame(instance=instance, klass=info.defining_class, info=info))
 
     def _current_frame(self):
         return self.method_frames[-1] if self.method_frames else None
 
-    def _bind_params(self, params: list, values: list):
-        for index_param, param in enumerate(params):
-            try:
-                self.set_global(
-                    name=param,
-                    value=KoskriptObject(
-                        values[index_param],
-                        read_only=True)
-                )
-            except IndexError:
-                break
+    def current_instance(self):
+        frames = self.method_frames
+        if frames:
+            frame = frames[-1]
+            if frame.instance is not None:
+                return frame.instance
+        raise Errors.RuntimeError("'this' can only be used inside an instance method")
 
-    def _invoke_method(self, info: MethodInfo, instance, args: list):
-        return self._invoke_method_values(
-            info, instance, [self.expr_eval(arg) for arg in args])
+    def new_value(self, name, target, values: list):
+        if type(target) is KoskriptClass:
+            return self._instantiate(target, values)
+        if inspect.isclass(target):
+            return target(*values)
+        raise Errors.RuntimeError(f"'{name}' is not a class")
 
-    def _invoke_method_values(self, info: MethodInfo, instance, values: list):
-        self._push_scope(f"method_{info.name}", info.closure)
-        self.method_frames.append(
-            Frame(instance=instance, klass=info.defining_class, info=info))
-        try:
-            self._bind_params(info.params, values)
-            try:
-                self.execute(info.body)
-            except ReturnSignal as signal:
-                return signal.value
-        except (BreakSignal, ContinueSignal) as signal:
-            raise Errors.RuntimeError(f"'{signal}' outside of a loop")
-        finally:
-            self.method_frames.pop()
-            self.scopes.pop()
-        return None
+    # CLASS EXPRESSIONS #########################################################
 
-    def _instantiate(self, klass: KoskriptClass, args: list) -> KoskriptInstance:
+    def define_class(self, name, parent_name, parent, closure, field_specs,
+                     method_specs, constructor_spec, constructor_count):
+        if parent is not None and not isinstance(parent, KoskriptClass):
+            raise Errors.RuntimeError(f"'{parent_name}' is not a class")
+
+        klass = KoskriptClass(name=name, parent=parent)
+        klass.closure = closure
+
+        for field, value_code, value_scope, const in field_specs:
+            info = FieldInfo(field.name, field.value, field.modifiers)
+
+            if info.static:
+                raise Errors.RuntimeError(
+                    f"field '{field.name}' cannot be static (only methods can be static)")
+
+            if info.name in klass.fields or info.name in klass.methods:
+                raise Errors.RuntimeError(
+                    f"'{info.name}' is already defined in class '{name}'")
+
+            if parent is not None and (
+                    parent.find_field(info.name) is not None
+                    or parent.find_method(info.name) is not None):
+                raise Errors.RuntimeError(
+                    f"field '{info.name}' shadows an inherited member of '{parent.name}'")
+
+            info.defining_class = klass
+            info.code = value_code
+            info.meta = value_scope
+            info.const = const
+            info.slot = klass.field_count
+            klass.field_count += 1
+            klass.fields[info.name] = info
+
+        for method, code in method_specs:
+            info = MethodInfo(
+                method.name, method.params, method.body,
+                method.modifiers, is_constructor=False
+            )
+
+            if info.name in klass.methods or info.name in klass.fields:
+                raise Errors.RuntimeError(
+                    f"'{info.name}' is already defined in class '{name}'")
+
+            if parent is not None:
+                if parent.find_field(info.name) is not None:
+                    raise Errors.RuntimeError(
+                        f"method '{info.name}' shadows an inherited field of '{parent.name}'")
+
+                inherited = parent.find_method(info.name)
+                if inherited is not None and inherited.static != info.static:
+                    kind = "static" if inherited.static else "instance"
+                    raise Errors.RuntimeError(
+                        f"cannot override {kind} method '{info.name}' of '{parent.name}' "
+                        f"with a {'static' if info.static else 'instance'} method")
+
+            info.defining_class = klass
+            info.closure = klass.closure
+            info.code = code
+            klass.methods[info.name] = info
+
+        if constructor_count > 1:
+            raise Errors.RuntimeError(
+                f"class '{name}' defines more than one constructor")
+
+        if constructor_spec is not None:
+            method, code = constructor_spec
+            constructor = MethodInfo(
+                method.name, method.params, method.body,
+                method.modifiers, is_constructor=True
+            )
+
+            if constructor.static:
+                raise Errors.RuntimeError("a constructor cannot be static")
+
+            constructor.defining_class = klass
+            constructor.closure = klass.closure
+            constructor.code = code
+            klass.constructor = constructor
+
+        return klass
+
+    def _instantiate(self, klass: KoskriptClass, values: list) -> KoskriptInstance:
         instance = KoskriptInstance(klass)
+        frames = self.method_frames
 
         for defining_class in klass.mro():
-            for name, field in defining_class.fields.items():
-                self._push_scope("class_fields", defining_class.closure)
-                self.method_frames.append(
-                    Frame(instance=instance, klass=defining_class, info=None))
+            closure = defining_class.closure
+            for name, info in defining_class.fields.items():
+                const = info.const
+                if const is not UNBOUND:
+                    instance.fields[info.slot] = const
+                    continue
+                env = Scope(closure, info.meta)
+                frames.append(Frame(instance=instance, klass=defining_class, info=None))
                 try:
-                    instance.fields[name] = self.expr_eval(field.value)
+                    instance.fields[info.slot] = info.code(env)
                 finally:
-                    self.method_frames.pop()
-                    self.scopes.pop()
+                    frames.pop()
 
         constructor = klass.find_constructor()
         if constructor is not None:
             self._check_private(constructor, constructor.defining_class)
-            self._invoke_method(constructor, instance, args)
+            self._invoke_method_values(constructor, instance, values)
 
         return instance
 
-    def _method_call(self, name: str, args: list):
+    def _method_call_values(self, name: str, values: list):
         frame = self._current_frame()
 
         if frame is None or frame.klass is None:
@@ -295,14 +293,12 @@ class KoskriptInterpreter(object):
         # Private methods are resolved non-virtually in their defining class;
         # public ones use dynamic dispatch on the actual instance class.
         info = None
-        if frame.klass is not None:
-            own = frame.klass.find_method(name)
-            if own is not None and own.visibility == "private":
-                info = own
+        own = frame.klass.find_method(name)
+        if own is not None and own.visibility == "private":
+            info = own
 
         if info is None:
-            start = frame.instance.klass
-            info = start.find_method(name)
+            info = frame.instance.klass.find_method(name)
 
         if info is None:
             raise Errors.RuntimeError(f"method '{name}' is not defined in '{frame.klass.name}'")
@@ -311,12 +307,10 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(f"'{name}' is static, call it as .{name}()")
 
         self._check_private(info, info.defining_class)
-        return self._invoke_method(info, frame.instance, args)
+        return self._invoke_method_values(info, frame.instance, values)
 
-    def _bound_method_call(self, target, name: str, args: list):
-        container = self.expr_eval(target)
-
-        if isinstance(container, KoskriptInstance):
+    def _bound_method_call_values(self, container, name: str, values: list):
+        if type(container) is KoskriptInstance:
             info = container.klass.find_method(name)
             if info is None:
                 raise Errors.RuntimeError(
@@ -327,9 +321,9 @@ class KoskriptInterpreter(object):
                     f"'{name}' is static, call it as '{container.klass.name}.{name}()'")
 
             self._check_private(info, info.defining_class)
-            return self._invoke_method(info, container, args)
+            return self._invoke_method_values(info, container, values)
 
-        if isinstance(container, KoskriptClass):
+        if type(container) is KoskriptClass:
             info = container.find_method(name)
             if info is None:
                 raise Errors.RuntimeError(
@@ -348,9 +342,9 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(
                 f"'{name}' is not a method of {type(container).__name__}")
 
-        return method(*[self.expr_eval(arg) for arg in args])
+        return method(*values)
 
-    def _super_call(self, name: str, args: list):
+    def _super_call_values(self, name: str, values: list):
         frame = self._current_frame()
 
         if frame is None or frame.instance is None:
@@ -370,7 +364,7 @@ class KoskriptInterpreter(object):
                 raise Errors.RuntimeError(f"class '{parent.name}' has no constructor")
 
             self._check_private(constructor, constructor.defining_class)
-            self._invoke_method(constructor, frame.instance, args)
+            self._invoke_method_values(constructor, frame.instance, values)
             return frame.instance
 
         info = parent.find_method(name)
@@ -381,9 +375,9 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(f"'{name}' is static, call it as .{name}()")
 
         self._check_private(info, info.defining_class)
-        return self._invoke_method(info, frame.instance, args)
+        return self._invoke_method_values(info, frame.instance, values)
 
-    def _static_ref(self, name: str):
+    def _static_ref_value(self, name: str):
         frame = self._current_frame()
 
         if frame is None or frame.klass is None:
@@ -399,6 +393,8 @@ class KoskriptInterpreter(object):
         self._check_private(info, info.defining_class)
         return BoundMethod(None, info)
 
+    # MEMBERS ###################################################################
+
     def _check_private(self, info_or_field, defining_class):
         if info_or_field.visibility != "private":
             return
@@ -409,18 +405,22 @@ class KoskriptInterpreter(object):
                 f"'{info_or_field.name}' is private to '{defining_class.name}' and cannot be accessed from outside")
 
     def _member_get(self, container, attr: str):
-        if isinstance(container, dict):
+        kind = type(container)
+
+        if kind is dict:
             try:
                 return container[attr]
             except KeyError:
-                raise Errors.RuntimeError(f"no member with the value '{attr}' is defined on {container}")
+                raise Errors.RuntimeError(
+                    f"no member with the value '{attr}' is defined on {container}")
 
-        if isinstance(container, KoskriptInstance):
+        if kind is KoskriptInstance:
             found = container.klass.find_field(attr)
             if found is not None:
                 defining_class, field = found
-                self._check_private(field, defining_class)
-                return container.fields[attr]
+                if field.visibility == "private":
+                    self._check_private(field, defining_class)
+                return container.fields[field.slot]
 
             info = container.klass.find_method(attr)
             if info is not None:
@@ -433,7 +433,7 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(
                 f"'{attr}' is not defined on '{container.klass.name}'")
 
-        if isinstance(container, KoskriptClass):
+        if kind is KoskriptClass:
             info = container.find_method(attr)
             if info is None:
                 raise Errors.RuntimeError(
@@ -463,19 +463,22 @@ class KoskriptInterpreter(object):
                 f"'{attr}' is not defined on {type(container).__name__}")
 
     def _member_set(self, container, attr: str, value):
-        if isinstance(container, dict):
+        kind = type(container)
+
+        if kind is dict:
             container[attr] = value
             return
 
-        if isinstance(container, KoskriptInstance):
+        if kind is KoskriptInstance:
             found = container.klass.find_field(attr)
             if found is None:
                 raise Errors.RuntimeError(
                     f"'{attr}' is not a field of '{container.klass.name}'")
 
             defining_class, field = found
-            self._check_private(field, defining_class)
-            container.fields[attr] = value
+            if field.visibility == "private":
+                self._check_private(field, defining_class)
+            container.fields[field.slot] = value
             return
 
         if container is None:
@@ -490,253 +493,3 @@ class KoskriptInterpreter(object):
         except AttributeError:
             raise Errors.MismatchType(
                 f"cannot assign member on {type(container).__name__}")
-
-
-    def cond_eval(self, condition):
-        match condition:
-            case EquComp(l, r): return self.expr_eval(l) == self.expr_eval(r)
-            case NequComp(l, r): return self.expr_eval(l) != self.expr_eval(r)
-            case LteComp(l, r): return self.expr_eval(l) <= self.expr_eval(r)
-            case GteComp(l, r): return self.expr_eval(l) >= self.expr_eval(r)
-            case GtComp(l, r): return self.expr_eval(l) > self.expr_eval(r)
-            case LtComp(l, r): return self.expr_eval(l) < self.expr_eval(r)
-
-            case AndCond(l, r): return self.cond_eval(l) and self.cond_eval(r)
-            case OrCond(l, r): return self.cond_eval(l) or self.cond_eval(r)
-
-            case NotCond(com): return not self.cond_eval(com[0])
-
-            case _: return bool(self.expr_eval(condition))
-    
-
-    # HANDLERS ######################################################################
-    
-    def _local_decl(self, node: LocalDecl):
-        value = self.expr_eval(node.value)
-        name = node.name
-
-        self.set_global(
-            name,
-            KoskriptObject(
-                value=value
-            )
-        )
-
-    def _const_decl(self, node: ConstDecl):
-        self.set_global(
-            name=node.name,
-            value=KoskriptObject(
-                value=self.expr_eval(node.value),
-                read_only=True
-            )
-        )
-
-    def _member_assign(self, node: MemberAssign):
-        value = self.expr_eval(node.value)
-        container = self.expr_eval(node.target)
-        self._member_set(container, node.attr, value)
-
-    def _class_def(self, node: ClassDef):
-        parent = None
-        if node.parent is not None:
-            parent_value = self.get_global(node.parent).value
-            if not isinstance(parent_value, KoskriptClass):
-                raise Errors.RuntimeError(f"'{node.parent}' is not a class")
-            parent = parent_value
-
-        klass = KoskriptClass(name=node.name, parent=parent)
-        klass.closure = self._current_scope()
-
-        for field in node.fields:
-            info = FieldInfo(field.name, field.value, field.modifiers)
-
-            if info.static:
-                raise Errors.RuntimeError(
-                    f"field '{field.name}' cannot be static (only methods can be static)")
-
-            if info.name in klass.fields or info.name in klass.methods:
-                raise Errors.RuntimeError(
-                    f"'{info.name}' is already defined in class '{node.name}'")
-
-            if parent is not None and (
-                    parent.find_field(info.name) is not None
-                    or parent.find_method(info.name) is not None):
-                raise Errors.RuntimeError(
-                    f"field '{info.name}' shadows an inherited member of '{parent.name}'")
-
-            info.defining_class = klass
-            klass.fields[info.name] = info
-
-        for method in node.methods:
-            info = MethodInfo(
-                method.name, method.params, method.body,
-                method.modifiers, is_constructor=False
-            )
-
-            if info.name in klass.methods or info.name in klass.fields:
-                raise Errors.RuntimeError(
-                    f"'{info.name}' is already defined in class '{node.name}'")
-
-            if parent is not None:
-                if parent.find_field(info.name) is not None:
-                    raise Errors.RuntimeError(
-                        f"method '{info.name}' shadows an inherited field of '{parent.name}'")
-
-                inherited = parent.find_method(info.name)
-                if inherited is not None and inherited.static != info.static:
-                    kind = "static" if inherited.static else "instance"
-                    raise Errors.RuntimeError(
-                        f"cannot override {kind} method '{info.name}' of '{parent.name}' "
-                        f"with a {'static' if info.static else 'instance'} method")
-
-            info.defining_class = klass
-            info.closure = klass.closure
-            klass.methods[info.name] = info
-
-        if len(node.constructors) > 1:
-            raise Errors.RuntimeError(
-                f"class '{node.name}' defines more than one constructor")
-
-        if node.constructors:
-            method = node.constructors[0]
-            constructor = MethodInfo(
-                method.name, method.params, method.body,
-                method.modifiers, is_constructor=True
-            )
-
-            if constructor.static:
-                raise Errors.RuntimeError("a constructor cannot be static")
-
-            constructor.defining_class = klass
-            constructor.closure = klass.closure
-            klass.constructor = constructor
-
-        self.set_global(node.name, KoskriptObject(value=klass))
-
-
-    def _decl(self, node: DeclStmt):
-        variable = self.get_global(node.name)
-
-        if not variable:
-            raise Errors.NameError(f"{node.name} is not declared.")
-
-        variable.set_value(self.expr_eval(node.value))
-
-    def _fn_def(self, node: FnDef):
-        self.set_global(
-            name=node.name,
-            value=KoskriptObject(
-                value=Function(
-                params=node.params,
-                body=node.body,
-                closure=self._current_scope(),
-                frame=self._current_frame()
-            ))
-        )
-
-    def _fn_call(self, node: FnCall):
-        #print(node)
-        return self.fn_eval(node.name, args=node.args)
-
-    def _return_stmt(self, node: ReturnStmt):
-        value = self.expr_eval(node.value) if node.value is not None else None
-        raise ReturnSignal(value)
-
-    def _while_stmt(self, node: WhileStmt):
-        while self.cond_eval(node.condition):
-            try:
-                self.execute_block(node.body)
-            except ContinueSignal:
-                continue
-            except BreakSignal:
-                break
-
-    def _for_stmt(self, node: ForStmt):
-        array_value = self.expr_eval(node.iterable)
-
-        if type(array_value) != list and type(array_value) != dict \
-                and not hasattr(array_value, "__iter__"):
-            raise Errors.MismatchType(f"for statement only supports maps, arrays or iterable objects.")
-
-        self._push_scope(f"for", self._current_scope())
-        try:
-            var = KoskriptObject(None)
-            var.read_only = True
-            self.set_global(node.var, var)
-
-            variable = self.get_global(node.var)
-            for value in array_value:
-                variable.value = value
-                try:
-                    self.execute_block(node.body)
-                except ContinueSignal:
-                    continue
-                except BreakSignal:
-                    break
-        finally:
-            self.scopes.pop()
-        
-    def _foritem_stmt(self, node: ForItemStmt):
-        map_value = self.expr_eval(node.iterable)
-
-        if type(map_value) != dict and not hasattr(map_value, "items"):
-            raise Errors.MismatchType(f"foreach statement only supports maps.")
-
-        self._push_scope(f"foreach", self._current_scope())
-        try:
-            keyvalue = KoskriptObject(None)
-            varvalue = KoskriptObject(None)
-
-            keyvalue.read_only = True
-            varvalue.read_only = True
-
-            self.set_global(node.key, keyvalue)
-            self.set_global(node.var, varvalue)
-
-            kval = self.get_global(node.key)
-            vval = self.get_global(node.var)
-            for key, value in map_value.items():
-                kval.value = key
-                vval.value = value
-                try:
-                    self.execute_block(node.body)
-                except ContinueSignal:
-                    continue
-                except BreakSignal:
-                    break
-        finally:
-            self.scopes.pop()
-
-    def _break_stmt(self, node: BreakStmt):
-        raise BreakSignal()
-
-    def _continue_stmt(self, node: ContinueStmt):
-        raise ContinueSignal()
-    
-    def _if_stmt(self, node: IfStmt):
-        condition = self.cond_eval(node.condition)
-
-        if condition:
-            self.execute_block(node.body)
-            return   
-
-        for obj in node.if_tree:
-            if type(obj) == ElseIfStmt:
-                res = self._else_if_stmt(obj)
-                if res:
-                    break
-            else:
-                self._else_stmt(obj)
-                break
-
-    def _else_if_stmt(self, node: ElseIfStmt):
-        condition = self.cond_eval(node.condition)
-        
-        if not condition:
-            return False
-    
-        self.execute_block(node.body)
-        return True
-    
-    def _else_stmt(self, node: ElseStmt):
-        self.execute_block(node.body)
