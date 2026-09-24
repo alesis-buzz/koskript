@@ -39,6 +39,33 @@ result = runtime.execute("return 1 + 2")          # 3
 The same runtime can execute multiple scripts; top-level declarations persist
 between calls.
 
+## Modules
+
+`import "name"` inside a script loads a `.kos` file from the **process working
+directory**:
+
+```python
+runtime.execute('import "utils"\nutils.hello()')
+```
+
+`execute_module()` runs a file as a module and returns it. Imports inside that
+module resolve against the module's own directory, so `modules/app.kos` can
+import `modules/helpers.kos` with `import "helpers"` no matter where the
+process runs from:
+
+```python
+module = runtime.execute_module("modules/app.kos")
+
+module.name        # "app"
+module["run"]      # a Koskript function value
+module.get("VERSION")
+module.scope       # internal top-level scope
+```
+
+Modules are cached per runtime: executing the same file again returns the same
+`Module`. A missing file raises `Errors.RuntimeError`; a circular import raises
+`Errors.RuntimeError` too.
+
 ## One-shot scripts
 
 `run()` keeps your process clean when you just need to evaluate a snippet:

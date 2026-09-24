@@ -19,6 +19,8 @@ class KoskriptInterpreter(object):
         self.root_info = ScopeInfo(None)
         self.root = Scope(None, self.root_info)
         self.compiler = Compiler(self)
+        # Set by KoskriptRuntime; loads and caches .kos modules.
+        self.module_loader = None
 
     # ENTRY POINTS ##############################################################
 
@@ -26,28 +28,40 @@ class KoskriptInterpreter(object):
         if type(ast) is not list:
             ast = [ast]
         chunk = self.compiler.compile_chunk(ast)
-        self._sync_root()
+        self._sync_scope(self.root)
         return chunk(self.root)
 
     def run(self, ast: list):
         # Entry point: a top-level `return` stops execution and yields its value.
+        return self.run_in(ast, self.root, self.root_info)
+
+    def run_in(self, ast: list, scope: Scope, scope_info: ScopeInfo,
+               base_dir: str = None):
+        """Compile and run ``ast`` in its own root scope (used by modules)."""
         if type(ast) is not list:
             ast = [ast]
-        chunk = self.compiler.compile_chunk(ast)
-        self._sync_root()
+        chunk = self.compiler.compile_chunk(ast, scope_info, base_dir)
+        self._sync_scope(scope)
         try:
-            return chunk(self.root)
+            return chunk(scope)
         except ReturnSignal as signal:
             return signal.value
         except (BreakSignal, ContinueSignal) as signal:
             raise Errors.RuntimeError(f"'{signal}' outside of a loop")
 
-    def _sync_root(self):
-        values = self.root.values
-        meta = self.root_info
-        missing = len(meta.names) - len(values)
+    def _sync_scope(self, scope: Scope):
+        values = scope.values
+        missing = len(scope.meta.names) - len(values)
         if missing > 0:
             values.extend([UNBOUND] * missing)
+
+    def import_module(self, path: str, base_dir: str = None):
+        """Resolve ``import "path"``; the loader is provided by the runtime."""
+        loader = self.module_loader
+        if loader is None:
+            raise Errors.RuntimeError(
+                "module imports need a KoskriptRuntime")
+        return loader(path, base_dir)
 
     # VARIABLES #################################################################
 
@@ -446,6 +460,14 @@ class KoskriptInterpreter(object):
             self._check_private(info, info.defining_class)
             return BoundMethod(None, info)
 
+        if kind is Module:
+            scope = container.scope
+            index = scope.meta.names.get(attr)
+            if index is None or scope.values[index] is UNBOUND:
+                raise Errors.RuntimeError(
+                    f"module '{container.name}' has no member '{attr}'")
+            return scope.values[index]
+
         if container is None:
             raise Errors.MismatchType("cannot access members on null")
 
@@ -479,6 +501,18 @@ class KoskriptInterpreter(object):
             if field.visibility == "private":
                 self._check_private(field, defining_class)
             container.fields[field.slot] = value
+            return
+
+        if kind is Module:
+            scope = container.scope
+            meta = scope.meta
+            index = meta.names.get(attr)
+            if index is None or scope.values[index] is UNBOUND:
+                raise Errors.RuntimeError(
+                    f"module '{container.name}' has no member '{attr}'")
+            if index in meta.readonly:
+                raise Errors.ProtectedObject("cannot modify a constant value.")
+            scope.values[index] = value
             return
 
         if container is None:

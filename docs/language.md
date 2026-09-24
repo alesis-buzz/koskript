@@ -14,6 +14,7 @@
 | `function` | A declared function, a lambda or a bound method |
 | `class` | A class object |
 | `instance` | An instance of a class |
+| `module` | A module loaded with `import` |
 
 `type(value)` returns the name of a value's type as a string. Values coming
 from Python report their Python type name instead.
@@ -96,6 +97,40 @@ local result = add(10, 20)
   between top-level functions).
 - Parameters are positional. Extra arguments are ignored and missing ones are
   bound to `null`.
+
+## Modules
+
+`import` loads another `.kos` file as a module and binds it to a name:
+
+```koskript
+import "utils"          // binds `utils`
+import "sub/math" as m  // binds `m`
+
+print(utils.hello("Ana"))
+print(m.double(21))
+```
+
+- The `.kos` extension is optional.
+- The default binding is the file name without the extension. Use `as` to pick
+  another name (also required when the file name is not a valid identifier).
+- A module exposes its top-level `local`, `const`, `fn` and `class` names as
+  members. `const` members are read-only; the other members can be read and
+  updated and reflect the module's live state.
+- Modules are loaded once per runtime and cached: importing the same file
+  twice returns the same module object. Circular imports raise an error.
+- Modules can use the standard library and any host globals registered in the
+  runtime, and can import other modules.
+
+Where imports are searched depends on how the code was started:
+
+| Entry point | Imports resolve against |
+|---|---|
+| `KoskriptRuntime.execute()` | the current working directory of the Python process |
+| `KoskriptRuntime.execute_module()` | the directory of the module file being executed |
+
+Nested imports are always resolved against the directory of the module that
+contains them, so a module in `modules/app.kos` can import its sibling with
+`import "helpers"` regardless of the process working directory.
 
 ## Operators
 
@@ -263,6 +298,7 @@ The following words cannot be used as identifiers:
 `if` `elseif` `else` `while` `for` `foreach` `fn` `return` `local` `const`
 `true` `false` `null` `and` `or` `not` `in` `break` `continue` `class`
 `extends` `new` `static` `public` `private` `this` `super` `constructor`
+`import` `as`
 
 Because they are reserved, member names such as `array.foreach` are not
 possible; the standard library uses `array.each` instead.

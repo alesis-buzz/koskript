@@ -1,6 +1,6 @@
 from lark import Lark
 from lark.exceptions import LarkError, UnexpectedInput
-from .lang.emtypes import KoskriptObject
+from .lang.emtypes import KoskriptObject, Module, Scope, ScopeInfo
 from .lang.interpreter import KoskriptInterpreter
 from .lang.astgen import KoskriptTransformer
 from .lang.errors import Errors
@@ -55,6 +55,9 @@ class KoskriptRuntime(object):
         self.globals = {}
         self.__interpreter__ = KoskriptInterpreter()
         self.__ast__ = KoskriptTransformer()
+        self.__interpreter__.module_loader = self._load_module
+        self._modules = {}
+        self._loading = []
 
         if stdlib:
             self.register_many(build_globals(self.__interpreter__.call_value))
@@ -89,8 +92,25 @@ class KoskriptRuntime(object):
         Returns the value of the last evaluated expression, or the value of a
         top-level ``return`` if the script uses one.
 
+        ``import "name"`` inside the script resolves against the current
+        working directory of the Python process.
+
         Raises ``Errors.SyntaxError`` if the code cannot be parsed.
         """
+        return self.__interpreter__.run(self._compile(code))
+
+    def execute_module(self, path: str):
+        """Execute ``path`` as a Koskript module and return the module.
+
+        The file is resolved against the current working directory, and the
+        imports inside it resolve against the directory of the module file.
+        Modules are loaded once per runtime and cached; circular imports raise
+        ``Errors.RuntimeError``.
+        """
+        base_dir = os.path.dirname(self._loading[-1]) if self._loading else None
+        return self._load_module(path, base_dir)
+
+    def _compile(self, code: str):
         try:
             tree = grammar.parse(code)
         except LarkError as e:
@@ -99,8 +119,61 @@ class KoskriptRuntime(object):
 
         if not isinstance(ast, list):
             ast = [ast]
+        return ast
 
-        return self.__interpreter__.run(ast)
+    def _load_module(self, path: str, base_dir: str = None):
+        if base_dir is None:
+            base_dir = os.getcwd()
+
+        candidate = path if os.path.isabs(path) else os.path.join(base_dir, path)
+        if not candidate.lower().endswith(".kos") and not os.path.isfile(candidate):
+            candidate += ".kos"
+        real = os.path.realpath(candidate)
+
+        if not os.path.isfile(real):
+            raise Errors.RuntimeError(
+                f"module '{path}' not found (looked for '{real}')")
+
+        cached = self._modules.get(real)
+        if cached is not None:
+            return cached
+
+        if real in self._loading:
+            raise Errors.RuntimeError(
+                f"circular import of module '{path}'")
+
+        try:
+            with open(real, "r", encoding="utf-8-sig") as handle:
+                code = handle.read()
+        except OSError as e:
+            raise Errors.RuntimeError(
+                f"cannot read module '{path}': {e}") from e
+
+        try:
+            tree = grammar.parse(code)
+        except LarkError as e:
+            raise Errors.SyntaxError(
+                f"module '{path}':\n{_format_syntax_error(code, e)}") from e
+
+        ast = self.__ast__.transform(tree)
+        if not isinstance(ast, list):
+            ast = [ast]
+
+        interpreter = self.__interpreter__
+        info = ScopeInfo(interpreter.root_info)
+        scope = Scope(interpreter.root, info)
+        name = os.path.splitext(os.path.basename(real))[0]
+
+        self._loading.append(real)
+        try:
+            interpreter.run_in(ast, scope, info,
+                               base_dir=os.path.dirname(real))
+        finally:
+            self._loading.pop()
+
+        module = Module(name, scope)
+        self._modules[real] = module
+        return module
 
 
 def run(code: str, globals_map: dict = None, stdlib: bool = True, **kwargs):
@@ -114,4 +187,5 @@ def run(code: str, globals_map: dict = None, stdlib: bool = True, **kwargs):
     return KoskriptRuntime(merged, stdlib=stdlib).execute(code)
 
 
-__all__ = ["KoskriptRuntime", "KoskriptObject", "Errors", "run", "build_globals"]
+__all__ = ["KoskriptRuntime", "KoskriptObject", "Module", "Errors", "run",
+           "build_globals"]

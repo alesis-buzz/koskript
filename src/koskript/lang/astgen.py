@@ -207,6 +207,13 @@ class KoskriptTransformer(Transformer):
         name, expr = tree
         return ConstDecl(name=name.name, value=expr)
 
+    # imports
+    def import_plain(self, tree):
+        return ImportStmt(path=tree[0].value, name=None)
+
+    def import_as(self, tree):
+        return ImportStmt(path=tree[0].value, name=tree[1].name)
+
     # modifiers
     def mod_static(self, tree): return "static"
     def mod_public(self, tree): return "public"

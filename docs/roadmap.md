@@ -12,6 +12,7 @@ and the known limitations.
 - `while`, `for`, `foreach` loops with `break` / `continue`
 - Member access and index access
 - Classes: inheritance, visibility, static methods, constructors, `super`
+- Module imports: `import "path"` with per-module resolution and caching
 - Python interop: values, callables, objects and classes (dunder attributes are blocked)
 - [Standard library](standard-library.md): core builtins plus `map`, `array`, `string`, `math` and `json`
 - Compiled execution engine (AST to Python code) with lexical slot resolution
@@ -25,7 +26,6 @@ and the known limitations.
   errors already have them).
 - Index assignment (`items[0] = 9`) and compound assignment (`+=`, `-=`, `*=`,
   `/=`, `%=`).
-- Module imports (`import "mymodule"`).
 - Wrap host exceptions raised while evaluating (for example `ZeroDivisionError`)
   as `Errors.RuntimeError`.
 - Fix the newline/call chaining ambiguity: a line starting with `(` after a call

@@ -14,8 +14,31 @@ forward declarations, missing arguments, ...) fall back to a dynamic chain
 lookup, which keeps the observable semantics of the original tree walker.
 """
 
+import os
+import re
+
 from .emtypes import *
 from .errors import Errors
+
+_IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+_RESERVED_NAMES = frozenset((
+    "if", "elseif", "else", "while", "for", "foreach", "fn", "return",
+    "local", "const", "true", "false", "null", "and", "or", "not", "in",
+    "break", "continue", "class", "extends", "new", "static", "public",
+    "private", "this", "super", "constructor", "import", "as",
+))
+
+
+def module_binding_name(path: str) -> str:
+    """Default binding name for ``import "path"``: the file stem."""
+    base = os.path.basename(path.replace("\\", "/"))
+    if base.lower().endswith(".kos"):
+        base = base[:-4]
+    if not _IDENTIFIER_RE.match(base) or base in _RESERVED_NAMES:
+        raise Errors.RuntimeError(
+            f"cannot import '{path}': '{base}' is not a valid module name, "
+            f'use import "{path}" as name')
+    return base
 
 
 def lookup_name(env, name):
@@ -425,6 +448,8 @@ class _Unit(object):
             self._emit_fn_def(node, scope, env)
         elif kind is ClassDef:
             self._emit_class_def(node, scope, env)
+        elif kind is ImportStmt:
+            self._emit_import(node, scope, env)
         elif kind is ReturnStmt:
             value = "None" if node.value is None else self.inline(node.value, scope, env)
             self.line(f"raise ReturnSignal({value})")
@@ -467,6 +492,13 @@ class _Unit(object):
         else:
             self.line(f"{target}.values[{index}] = {value_temp}")
         self.indent -= 1
+
+    def _emit_import(self, node, scope, env):
+        name = node.name or module_binding_name(node.path)
+        index = scope.names[name]
+        base = self.compiler.base_dir
+        self.line(
+            f"{env}.values[{index}] = _i.import_module({node.path!r}, {base!r})")
 
     def _emit_fn_def(self, node, scope, env):
         index = scope.names[node.name]
@@ -637,11 +669,14 @@ class _Unit(object):
 class Compiler(object):
     def __init__(self, interpreter):
         self.interp = interpreter
+        self.base_dir = None
 
     # ENTRY POINT ###############################################################
 
-    def compile_chunk(self, statements: list):
-        scope = self.interp.root_info
+    def compile_chunk(self, statements: list, scope_info: ScopeInfo = None,
+                      base_dir: str = None):
+        scope = self.interp.root_info if scope_info is None else scope_info
+        self.base_dir = base_dir
         self._predeclare(statements, scope)
         unit = _Unit(self, scope)
         unit.open_chunk()
@@ -680,6 +715,8 @@ class Compiler(object):
                 scope.declare(stmt.name)
             elif kind is ClassDef:
                 scope.declare(stmt.name)
+            elif kind is ImportStmt:
+                scope.declare(stmt.name or module_binding_name(stmt.path))
 
     def _resolve(self, scope: ScopeInfo, name: str):
         """Return ``(hops, index, scope_info)`` for a statically known name."""

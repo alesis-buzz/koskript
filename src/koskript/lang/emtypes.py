@@ -41,6 +41,7 @@ ReturnStmt = namedtuple("ReturnStmt", ["value"])
 FnDef  = namedtuple("FnDef",  ["name", "params", "body"])
 FnCall = namedtuple("FnCall", ["name", "args"])
 LambdaFnDef = namedtuple("LambdaFnDef", ["params", "body"])
+ImportStmt = namedtuple("ImportStmt", ["path", "name"])
 
 # Class objects
 ClassDef = namedtuple("ClassDef", ["name", "parent", "fields", "methods", "constructors"])
@@ -320,6 +321,34 @@ class BoundMethod(object):
     def __repr__(self):
         target = self.instance if self.instance is not None else self.info.defining_class
         return f"<bound {self.info.name} of {target}>"
+
+
+class Module(object):
+    """A loaded Koskript module. Members are read from its top-level scope."""
+
+    __slots__ = ("name", "scope")
+
+    def __init__(self, name: str, scope: Scope):
+        self.name = name
+        self.scope = scope
+
+    def get(self, name: str):
+        scope = self.scope
+        index = scope.meta.names.get(name)
+        if index is None or scope.values[index] is UNBOUND:
+            raise Errors.NameError(
+                f"module '{self.name}' has no member '{name}'")
+        return scope.values[index]
+
+    def __getitem__(self, name: str):
+        return self.get(name)
+
+    def __contains__(self, name: str) -> bool:
+        index = self.scope.meta.names.get(name)
+        return index is not None and self.scope.values[index] is not UNBOUND
+
+    def __repr__(self):
+        return f"<module {self.name}>"
 
 
 def _resolve_modifiers(name: str, modifiers: list):
