@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "koskript"
-version = "1.4.0"
+version = "1.4.1.dev1"
 description = "A programming language fully embbeded on python."
 readme = "README.md"
 requires-python = ">=3.10"
