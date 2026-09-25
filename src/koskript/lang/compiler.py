@@ -26,6 +26,7 @@ _RESERVED_NAMES = frozenset((
     "local", "const", "true", "false", "null", "and", "or", "not", "in",
     "break", "continue", "class", "extends", "new", "static", "public",
     "private", "this", "super", "constructor", "import", "as",
+    "error", "throw", "try", "catch", "finally",
 ))
 
 
@@ -275,10 +276,13 @@ class _Unit(object):
             "__builtins__": {},
             "Scope": Scope,
             "Function": Function,
+            "ErrorType": ErrorType,
             "Errors": Errors,
             "ReturnSignal": ReturnSignal,
             "BreakSignal": BreakSignal,
             "ContinueSignal": ContinueSignal,
+            "ThrownSignal": ThrownSignal,
+            "Exception": Exception,
             "lookup_name": lookup_name,
             "assign_name": assign_name,
             "index_get": index_get,
@@ -463,6 +467,12 @@ class _Unit(object):
             self.line("raise BreakSignal()")
         elif kind is ContinueStmt:
             self.line("raise ContinueSignal()")
+        elif kind is ErrorDef:
+            self._emit_error_def(node, scope, env)
+        elif kind is ThrowStmt:
+            self.line(f"_i.throw_value({self.inline(node.value, scope, env)})")
+        elif kind is TryStmt:
+            self._emit_try(node, scope, env)
         elif kind is IfStmt:
             self._emit_if(node, scope, env)
         else:
@@ -509,6 +519,16 @@ class _Unit(object):
         self.line(
             f"{env}.values[{index}] = Function({params_const}, {code_const}, "
             f"{env}, _i._current_frame(), {node.name!r})")
+
+    def _emit_error_def(self, node, scope, env):
+        index = scope.names[node.name]
+        code, _body_scope = self.compiler._compile_function(
+            node.params, self.compiler._as_statements(node.body), scope)
+        code_const = self.add_const(code)
+        params_const = self.add_const(tuple(node.params))
+        self.line(
+            f"{env}.values[{index}] = ErrorType({node.name!r}, {params_const}, "
+            f"{code_const}, {env})")
 
     def _emit_class_def(self, node, scope, env):
         index = scope.names[node.name]
@@ -665,6 +685,64 @@ class _Unit(object):
                 self.line("pass")
             self.indent -= 1
 
+    def _emit_try(self, node, scope, env):
+        has_catch = node.catch_body is not None
+        has_finally = node.finally_body is not None
+
+        if not has_catch and not has_finally:
+            # `try { ... }` with no catch/finally is just a block.
+            body_scope = ScopeInfo(scope)
+            self.compiler._predeclare(node.body, body_scope)
+            self._emit_block(node.body, body_scope, scope, env)
+            return
+
+        body_scope = ScopeInfo(scope)
+        self.compiler._predeclare(node.body, body_scope)
+        self.line("try:")
+        self.indent += 1
+        self._emit_block(node.body, body_scope, scope, env)
+        self.indent -= 1
+
+        if has_catch:
+            # Control-flow signals are not errors: let them unwind normally.
+            self.line("except (ReturnSignal, BreakSignal, ContinueSignal):")
+            self.indent += 1
+            self.line("raise")
+            self.indent -= 1
+
+            catch_scope = ScopeInfo(scope)
+            catch_scope.declare(node.catch_name)
+            self.compiler._predeclare(node.catch_body, catch_scope)
+            self.line("except Exception as __s:")
+            self.indent += 1
+            catch_env = self.new_env(catch_scope, env)
+            self.line(
+                f"{catch_env}.values[0] = (__s.instance if "
+                f"type(__s) is ThrownSignal else _i.wrap_exception(__s))")
+            start = len(self.lines)
+            self.emit_statements(node.catch_body, catch_scope, catch_env)
+            if len(self.lines) == start:
+                self.line("pass")
+            self.indent -= 1
+
+        if has_finally:
+            finally_scope = ScopeInfo(scope)
+            self.compiler._predeclare(node.finally_body, finally_scope)
+            self.line("finally:")
+            self.indent += 1
+            self._emit_block(node.finally_body, finally_scope, scope, env)
+            self.indent -= 1
+
+    def _emit_block(self, statements, block_scope, parent_scope, parent_env):
+        start = len(self.lines)
+        if block_scope.names:
+            block_env = self.new_env(block_scope, parent_env)
+            self.emit_statements(statements, block_scope, block_env)
+        else:
+            self.emit_statements(statements, parent_scope, parent_env)
+        if len(self.lines) == start:
+            self.line("pass")
+
 
 class Compiler(object):
     def __init__(self, interpreter):
@@ -712,6 +790,8 @@ class Compiler(object):
             elif kind is ConstDecl:
                 scope.declare(stmt.name, readonly=True)
             elif kind is FnDef:
+                scope.declare(stmt.name)
+            elif kind is ErrorDef:
                 scope.declare(stmt.name)
             elif kind is ClassDef:
                 scope.declare(stmt.name)

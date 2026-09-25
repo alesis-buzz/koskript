@@ -14,6 +14,8 @@ MapValue = namedtuple("MapValue", ["key", "value"])
 NameRef = namedtuple("NameRef", ["name"])
 MemberAccess = namedtuple("MemberAccess", ["name", "attrs"])
 IndexAccess = namedtuple("IndexAccess", ["value", "index"])
+CatchClause = namedtuple("CatchClause", ["name", "body"])
+FinallyClause = namedtuple("FinallyClause", ["body"])
 
 # Control-flow signal raised by `return` so it can unwind out of
 # if/while/for blocks and be caught by the enclosing function call.
@@ -32,6 +34,15 @@ class ContinueSignal(Exception):
     def __init__(self):
         super().__init__("continue")
 
+# Signal raised by `throw`; caught by the nearest `try` block, or converted
+# to an `Errors.KoskriptError` when it reaches the top level.
+class ThrownSignal(Exception):
+    __slots__ = ("instance",)
+
+    def __init__(self, instance):
+        self.instance = instance
+        super().__init__(str(instance))
+
 # Node Objects
 LocalDecl = namedtuple("LocalDecl", ["name", "value"])
 ConstDecl = namedtuple("ConstDecl", ["name", "value"])
@@ -42,6 +53,11 @@ FnDef  = namedtuple("FnDef",  ["name", "params", "body"])
 FnCall = namedtuple("FnCall", ["name", "args"])
 LambdaFnDef = namedtuple("LambdaFnDef", ["params", "body"])
 ImportStmt = namedtuple("ImportStmt", ["path", "name"])
+ErrorDef = namedtuple("ErrorDef", ["name", "params", "body"])
+
+# ── Errors ──────────────────────────────────────────────────
+ThrowStmt = namedtuple("ThrowStmt", ["value"])
+TryStmt = namedtuple("TryStmt", ["body", "catch_name", "catch_body", "finally_body"])
 
 # Class objects
 ClassDef = namedtuple("ClassDef", ["name", "parent", "fields", "methods", "constructors"])
@@ -157,6 +173,58 @@ class Function(object):
 
     def __repr__(self):
         return f"<function {self.name}>"
+
+
+class ErrorType(object):
+    """A user-defined error declared with ``error Name(params) { ... }``.
+
+    Calling the type runs its body with the new :class:`ErrorInstance` bound
+    to the first parameter, so ``err.message = "..."`` configures it.
+    """
+
+    __slots__ = ("name", "params", "code", "closure")
+
+    def __init__(self, name, params=(), code=None, closure=None):
+        self.name = name
+        self.params = tuple(params)
+        self.code = code
+        self.closure = closure
+
+    def __repr__(self):
+        return f"<error {self.name}>"
+
+
+class ErrorInstance(object):
+    """An error value: the result of calling an :class:`ErrorType`.
+
+    ``fields`` holds the values assigned in the error body (``message``,
+    custom parameters, ...). ``native`` keeps the original Python exception
+    when the error wraps a host failure caught by ``try``.
+    """
+
+    __slots__ = ("type", "fields", "native")
+
+    def __init__(self, error_type, fields=None, native=None):
+        self.type = error_type
+        self.fields = {} if fields is None else fields
+        self.native = native
+
+    @property
+    def name(self) -> str:
+        return self.type.name
+
+    @property
+    def message(self):
+        return self.fields.get("message")
+
+    def __str__(self):
+        message = self.fields.get("message")
+        if message is None or message == "":
+            return self.type.name
+        return f"{self.type.name}: {message}"
+
+    def __repr__(self):
+        return f"<error {self}>"
 
 
 class KoskriptObject(object):

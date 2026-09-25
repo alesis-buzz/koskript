@@ -12,7 +12,7 @@ you expose becomes available to them.
 | Document | What it covers |
 |---|---|
 | [Getting started](getting-started.md) | Installation, first script, a complete example |
-| [Language reference](language.md) | Types, variables, operators, control flow, functions, closures, modules, loops, strings |
+| [Language reference](language.md) | Types, variables, operators, control flow, errors, functions, closures, modules, loops, strings |
 | [Classes](classes.md) | Inheritance, visibility, static members, constructors, `super` |
 | [Standard library](standard-library.md) | Core builtins and the `map`, `array`, `string`, `math` and `json` namespaces |
 | [Python interop](python-interop.md) | Exposing Python values, callables and classes to scripts |

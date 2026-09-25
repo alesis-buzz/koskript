@@ -167,6 +167,62 @@ if (x > 10) {
 }
 ```
 
+## Errors
+
+Errors are declared with `error`, raised with `throw` and handled with
+`try` / `catch` / `finally`:
+
+```koskript
+error MyError (err) {
+    err.message = "something went wrong"
+}
+
+try {
+    throw MyError()
+} catch e {
+    print(e.name)      // MyError
+    print(e.message)   // something went wrong
+} finally {
+    print("done")      // always runs
+}
+```
+
+The first parameter of an error body is the error itself, so `err.message`
+configures the message reported when the error is not caught. Extra
+parameters become fields of the error:
+
+```koskript
+error HttpError (err, status) {
+    err.message = "request failed"
+    err.status = status
+}
+
+try {
+    throw HttpError(404)
+} catch e {
+    print(e.status)    // 404
+}
+```
+
+Only error values can be thrown. `catch` and `finally` are both optional and
+can be combined; `finally` runs whether or not an error was thrown. The catch
+variable lives in its own block scope, and `throw e` inside a `catch` rethrows
+the error. Errors propagate out of functions and methods until some `try`
+catches them; if none does, the script stops with an
+`Errors.KoskriptError` whose message is the error name and its `message`.
+
+Native Python failures raised by the runtime are caught too. Inside `catch`
+they expose `e.name`, `e.message` and the original exception in `e.native`:
+
+```koskript
+try {
+    local x = 1 / 0
+} catch e {
+    print(e.name)      // ZeroDivisionError
+    print(e.message)   // division by zero
+}
+```
+
 ## Lambda Functions
 
 Lambdas are anonymous functions; the last expression is **not** returned
@@ -298,7 +354,7 @@ The following words cannot be used as identifiers:
 `if` `elseif` `else` `while` `for` `foreach` `fn` `return` `local` `const`
 `true` `false` `null` `and` `or` `not` `in` `break` `continue` `class`
 `extends` `new` `static` `public` `private` `this` `super` `constructor`
-`import` `as`
+`import` `as` `error` `throw` `try` `catch` `finally`
 
 Because they are reserved, member names such as `array.foreach` are not
 possible; the standard library uses `array.each` instead.

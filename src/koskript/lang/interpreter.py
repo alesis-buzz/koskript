@@ -16,6 +16,7 @@ class KoskriptInterpreter(object):
     def __init__(self):
         self.globals = {}
         self.method_frames = []
+        self._native_errors = {}
         self.root_info = ScopeInfo(None)
         self.root = Scope(None, self.root_info)
         self.compiler = Compiler(self)
@@ -29,11 +30,22 @@ class KoskriptInterpreter(object):
             ast = [ast]
         chunk = self.compiler.compile_chunk(ast)
         self._sync_scope(self.root)
-        return chunk(self.root)
+        try:
+            return chunk(self.root)
+        except ThrownSignal as signal:
+            raise self._uncaught(signal) from None
 
     def run(self, ast: list):
         # Entry point: a top-level `return` stops execution and yields its value.
-        return self.run_in(ast, self.root, self.root_info)
+        try:
+            return self.run_in(ast, self.root, self.root_info)
+        except ThrownSignal as signal:
+            raise self._uncaught(signal) from None
+
+    @staticmethod
+    def _uncaught(signal: ThrownSignal) -> Errors.KoskriptError:
+        """Convert an uncaught `throw` into a host-facing exception."""
+        return Errors.KoskriptError(str(signal.instance), signal.instance)
 
     def run_in(self, ast: list, scope: Scope, scope_info: ScopeInfo,
                base_dir: str = None):
@@ -109,10 +121,43 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(
                 f"class '{value.name}' is not callable, use 'new {value.name}()'")
 
+        if kind is ErrorType:
+            return self.instantiate_error(value, values)
+
+        if kind is ErrorInstance:
+            raise Errors.RuntimeError(
+                f"error '{value.type.name}' is not callable")
+
         if callable(value):
             return value(*values)
 
         raise Errors.MismatchType(f"{type(value).__name__} is not callable")
+
+    # ERRORS ####################################################################
+
+    def instantiate_error(self, error_type: ErrorType, values: list) -> ErrorInstance:
+        """Run an error body and return the configured error value."""
+        instance = ErrorInstance(error_type)
+        code = error_type.code
+        if code is not None:
+            code(self, error_type.closure, [instance, *values], EMPTY_FRAME)
+        return instance
+
+    def throw_value(self, value):
+        """Raise ``value`` as the nearest `try` block's caught error."""
+        if type(value) is not ErrorInstance:
+            raise Errors.MismatchType(
+                f"only errors can be thrown, got {type(value).__name__}")
+        raise ThrownSignal(value)
+
+    def wrap_exception(self, exc: Exception) -> ErrorInstance:
+        """Wrap a host exception so `catch` can inspect it like an error."""
+        kind = type(exc)
+        error_type = self._native_errors.get(kind)
+        if error_type is None:
+            error_type = ErrorType(kind.__name__)
+            self._native_errors[kind] = error_type
+        return ErrorInstance(error_type, {"message": str(exc)}, exc)
 
     def _call_function(self, func: Function, values: list):
         frame = func.frame
@@ -447,6 +492,19 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(
                 f"'{attr}' is not defined on '{container.klass.name}'")
 
+        if kind is ErrorInstance:
+            fields = container.fields
+            if attr in fields:
+                return fields[attr]
+            if attr == "name":
+                return container.type.name
+            if attr == "native":
+                return container.native
+            if attr == "message":
+                return None
+            raise Errors.RuntimeError(
+                f"error '{container.type.name}' has no member '{attr}'")
+
         if kind is KoskriptClass:
             info = container.find_method(attr)
             if info is None:
@@ -501,6 +559,13 @@ class KoskriptInterpreter(object):
             if field.visibility == "private":
                 self._check_private(field, defining_class)
             container.fields[field.slot] = value
+            return
+
+        if kind is ErrorInstance:
+            if attr == "name":
+                raise Errors.RuntimeError(
+                    "the name of an error cannot be modified")
+            container.fields[attr] = value
             return
 
         if kind is Module:

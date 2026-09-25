@@ -105,6 +105,13 @@ Script errors are raised as exceptions under `koskript.Errors`:
 | `Errors.MismatchType` | A value has the wrong type (also used for wrong argument counts). |
 | `Errors.ProtectedObject` | Code tries to reassign a `const`. |
 | `Errors.RuntimeError` | Any other runtime failure (index out of range, invalid JSON...). |
+| `Errors.KoskriptError` | A script `throw` reached the top level without a `catch`. |
+
+`Errors.KoskriptError` carries the thrown error value in `e.instance`
+(`e.instance.name` is the error type, `e.instance.message` its message, and
+any extra fields live in `e.instance.fields`). Its own message is the error
+name plus the message field. Errors caught by a script `try` block never
+reach the host.
 
 ```python
 from koskript import Errors

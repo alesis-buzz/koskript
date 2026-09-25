@@ -12,6 +12,7 @@ and the known limitations.
 - `while`, `for`, `foreach` loops with `break` / `continue`
 - Member access and index access
 - Classes: inheritance, visibility, static methods, constructors, `super`
+- `try` / `catch` / `finally` with `throw` and user-defined `error` types
 - Module imports: `import "path"` with per-module resolution and caching
 - Python interop: values, callables, objects and classes (dunder attributes are blocked)
 - [Standard library](standard-library.md): core builtins plus `map`, `array`, `string`, `math` and `json`
@@ -20,8 +21,6 @@ and the known limitations.
 
 ## Next
 
-- `try` / `catch` / `throw`. Today any script error aborts the whole
-  `execute()` call.
 - Runtime error locations: include line and column in runtime errors (syntax
   errors already have them).
 - Index assignment (`items[0] = 9`) and compound assignment (`+=`, `-=`, `*=`,

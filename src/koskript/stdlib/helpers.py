@@ -1,7 +1,8 @@
 import inspect
 
 from ..lang.emtypes import (
-    BoundMethod, Function, KoskriptClass, KoskriptInstance, Module)
+    BoundMethod, ErrorInstance, ErrorType, Function, KoskriptClass,
+    KoskriptInstance, Module)
 from ..lang.errors import Errors
 
 
@@ -24,6 +25,8 @@ def type_name(value) -> str:
         return "class"
     if isinstance(value, KoskriptInstance):
         return "instance"
+    if isinstance(value, (ErrorType, ErrorInstance)):
+        return "error"
     if isinstance(value, Module):
         return "module"
     if isinstance(value, (Function, BoundMethod)):

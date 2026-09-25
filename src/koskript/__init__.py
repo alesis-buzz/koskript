@@ -1,6 +1,6 @@
 from lark import Lark
 from lark.exceptions import LarkError, UnexpectedInput
-from .lang.emtypes import KoskriptObject, Module, Scope, ScopeInfo
+from .lang.emtypes import KoskriptObject, Module, Scope, ScopeInfo, ThrownSignal
 from .lang.interpreter import KoskriptInterpreter
 from .lang.astgen import KoskriptTransformer
 from .lang.errors import Errors
@@ -108,7 +108,10 @@ class KoskriptRuntime(object):
         ``Errors.RuntimeError``.
         """
         base_dir = os.path.dirname(self._loading[-1]) if self._loading else None
-        return self._load_module(path, base_dir)
+        try:
+            return self._load_module(path, base_dir)
+        except ThrownSignal as signal:
+            raise self.__interpreter__._uncaught(signal) from None
 
     def _compile(self, code: str):
         try:

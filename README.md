@@ -19,8 +19,8 @@ array.each(names, (name) { print("hello " + name) })
 """)
 ```
 
-> **NOTE:** Koskript is in early development. Error handling is on the way;
-> expect the language and API to change between releases.
+> **NOTE:** Koskript is in early development; expect the language and API to
+> change between releases.
 
 ---
 
@@ -36,6 +36,7 @@ array.each(names, (name) { print("hello " + name) })
 - Native Python interop for functions, objects and classes.
 - `if`, `elseif`, `else`.
 - `while`, `for`, `foreach` loops with `break` / `continue`.
+- Error handling with `error` declarations, `throw`, `try` / `catch` / `finally`.
 - Member access and index access.
 - First-class functions and lambda expressions.
 - Arithmetic, comparison and logical operators.
@@ -64,7 +65,7 @@ Koskript requires Python 3.10+ and [Lark](https://github.com/lark-parser/lark).
 | Document | What it covers |
 |---|---|
 | [Getting started](docs/getting-started.md) | Installation, first script, a complete example |
-| [Language reference](docs/language.md) | Types, variables, operators, control flow, functions, closures, modules, loops, strings |
+| [Language reference](docs/language.md) | Types, variables, operators, control flow, errors, functions, closures, modules, loops, strings |
 | [Classes](docs/classes.md) | Inheritance, visibility, static members, constructors, `super` |
 | [Standard library](docs/standard-library.md) | Core builtins and the `map`, `array`, `string`, `math` and `json` namespaces |
 | [Python interop](docs/python-interop.md) | Exposing Python values, callables and classes to scripts |

@@ -214,6 +214,41 @@ class KoskriptTransformer(Transformer):
     def import_as(self, tree):
         return ImportStmt(path=tree[0].value, name=tree[1].name)
 
+    # errors
+    def error_def(self, tree):
+        name, params, body = tree
+        return ErrorDef(name=name.name, params=params, body=body)
+
+    def error_def_nargs(self, tree):
+        name, body = tree
+        return ErrorDef(name=name.name, params=[], body=body)
+
+    def throw_stmt(self, tree):
+        return ThrowStmt(value=tree[0])
+
+    def catch_clause(self, tree):
+        name, body = tree
+        return CatchClause(name=name.name, body=body)
+
+    def finally_clause(self, tree):
+        return FinallyClause(body=tree[0])
+
+    def try_stmt(self, tree):
+        body = tree[0]
+        catch = None
+        final = None
+        for item in tree[1:]:
+            if type(item) is CatchClause:
+                catch = item
+            else:
+                final = item
+        return TryStmt(
+            body=body,
+            catch_name=catch.name if catch is not None else None,
+            catch_body=catch.body if catch is not None else None,
+            finally_body=final.body if final is not None else None,
+        )
+
     # modifiers
     def mod_static(self, tree): return "static"
     def mod_public(self, tree): return "public"

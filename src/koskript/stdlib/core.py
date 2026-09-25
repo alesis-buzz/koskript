@@ -1,4 +1,5 @@
 from .helpers import arity, type_name, unary
+from ..lang.emtypes import ErrorInstance
 from ..lang.errors import Errors
 
 
@@ -9,6 +10,8 @@ def to_string(value, seen=None):
         return "true" if value else "false"
     if isinstance(value, str):
         return value
+    if isinstance(value, ErrorInstance):
+        return str(value)
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
