@@ -22,7 +22,8 @@ from .errors import Errors
 
 _IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 _RESERVED_NAMES = frozenset((
-    "if", "elseif", "else", "while", "for", "foreach", "fn", "return",
+    "if", "elseif", "else", "while", "for", "foreach", "fn", "wrapper",
+    "return",
     "local", "const", "true", "false", "null", "and", "or", "not", "in",
     "break", "continue", "class", "extends", "new", "static", "public",
     "private", "this", "super", "constructor", "import", "as",
@@ -263,15 +264,16 @@ class _Unit(object):
 
     __slots__ = ("compiler", "scope", "params", "use_frame", "ns",
                  "lines", "indent", "const_index", "temp_index", "env_index",
-                 "body_start", "create_scope")
+                 "body_start", "create_scope", "implicit_return")
 
     def __init__(self, compiler, scope, params=(), use_frame=False,
-                 create_scope=True):
+                 create_scope=True, implicit_return=False):
         self.compiler = compiler
         self.scope = scope
         self.params = params
         self.use_frame = use_frame
         self.create_scope = create_scope
+        self.implicit_return = implicit_return
         self.ns = {
             "__builtins__": {},
             "Scope": Scope,
@@ -351,6 +353,8 @@ class _Unit(object):
         if self.use_frame:
             self.line("__frames = _i.method_frames")
             self.line("__frames.append(frame)")
+        if self.implicit_return:
+            self.line("__r = None")
         self.line("try:")
         self.indent += 1
         self.body_start = len(self.lines)
@@ -372,7 +376,10 @@ class _Unit(object):
             self.indent += 1
             self.line("__frames.pop()")
             self.indent -= 1
-        self.line("return None")
+        if self.implicit_return:
+            self.line("return __r")
+        else:
+            self.line("return None")
         return self._finish(
             "__fn",
             "def __fn(_i, closure, values, frame, _g=lookup_name, "
@@ -513,12 +520,20 @@ class _Unit(object):
     def _emit_fn_def(self, node, scope, env):
         index = scope.names[node.name]
         code, _body_scope = self.compiler._compile_function(
-            node.params, self.compiler._as_statements(node.body), scope)
+            node.params, self.compiler._as_statements(node.body), scope,
+            implicit_return=node.implicit_return)
         code_const = self.add_const(code)
         params_const = self.add_const(tuple(node.params))
-        self.line(
-            f"{env}.values[{index}] = Function({params_const}, {code_const}, "
-            f"{env}, _i._current_frame(), {node.name!r})")
+        source = (
+            f"Function({params_const}, {code_const}, {env}, "
+            f"_i._current_frame(), {node.name!r}, _i)")
+        if node.decorators:
+            decorators = [
+                self.compiler._compile_expression(decorator, scope)
+                for decorator in node.decorators]
+            decorators_const = self.add_const(decorators)
+            source = f"_i.apply_decorators({env}, {decorators_const}, {source})"
+        self.line(f"{env}.values[{index}] = {source}")
 
     def _emit_error_def(self, node, scope, env):
         index = scope.names[node.name]
@@ -550,7 +565,10 @@ class _Unit(object):
             body = self.compiler._as_statements(method.body)
             code, _body_scope = self.compiler._compile_function(
                 method.params, body, scope)
-            method_specs.append((method, code))
+            decorators = [
+                self.compiler._compile_expression(decorator, scope)
+                for decorator in method.decorators]
+            method_specs.append((method, code, decorators))
 
         constructor_spec = None
         if node.constructors:
@@ -764,7 +782,7 @@ class Compiler(object):
         return lambda env, _chunk=chunk, _i=interp: _chunk(_i, env)
 
     def _compile_function(self, params: list, body_statements: list,
-                          enclosing: ScopeInfo):
+                          enclosing: ScopeInfo, implicit_return: bool = False):
         """Compile a function body, returning its code object and scope info."""
         scope = ScopeInfo(enclosing)
         for param in params:
@@ -774,9 +792,11 @@ class Compiler(object):
         compile_scope = scope if create_scope else enclosing
         unit = _Unit(self, compile_scope, params=params,
                      use_frame=_uses_frame(body_statements),
-                     create_scope=create_scope)
+                     create_scope=create_scope,
+                     implicit_return=implicit_return)
         unit.open_function()
-        unit.emit_statements(body_statements, compile_scope, "env")
+        unit.emit_statements(body_statements, compile_scope, "env",
+                             track_result=implicit_return)
         code = unit.close_function()
         return code, compile_scope
 
@@ -850,6 +870,7 @@ class Compiler(object):
         interp = self.interp
 
         def run(env, _code=code, _params=params, _interp=interp):
-            return Function(_params, _code, env, _interp._current_frame(), "<lambda>")
+            return Function(_params, _code, env, _interp._current_frame(),
+                            "<lambda>", _interp)
 
         return run

@@ -98,6 +98,72 @@ local result = add(10, 20)
 - Parameters are positional. Extra arguments are ignored and missing ones are
   bound to `null`.
 
+## Wrappers and Decorators
+
+A `wrapper` is a function whose last expression is returned implicitly, so it
+does not need a `return`. Wrappers are meant to be used as decorators:
+
+```koskript
+wrapper loud(target) {
+    (name) {
+        return target(name) + "!"
+    }
+}
+
+@loud
+fn greet(name) {
+    return "hola " + name
+}
+
+print(greet("Ana"))   // hola Ana!
+```
+
+`@Decorator` wraps the `fn` or method written below it, like Python
+decorators:
+
+- `@Decorator` is `fn = Decorator(fn)`.
+- `@Decorator(args)` is `fn = Decorator(args)(fn)`.
+- Multiple decorators apply bottom-up: `@a @b fn f` is `a(b(f))`.
+- Decorator expressions run once, when the definition executes.
+
+They can decorate top-level `fn`, nested `fn` inside functions and methods,
+and class methods:
+
+```koskript
+class Api {
+    @loud
+    public fn ping() { return "pong" }
+}
+```
+
+The decorator receives the raw function as a normal value. For methods, that
+value is the method itself: calling it inside a wrapper runs the original
+implementation with the instance already bound, so `this` and `::Method()`
+keep working — both in the method and in the wrapper:
+
+```koskript
+wrapper count_calls(target) {
+    () {
+        print("called")
+        return target()
+    }
+}
+```
+
+Because a wrapper is just a function, it can also be called directly, stored
+in variables and passed around:
+
+```koskript
+wrapper double(x) { x * 2 }
+
+const times_two = double
+print(times_two(21))   // 42
+```
+
+Only the last **expression** of a wrapper is returned implicitly; use `return`
+for control flow and inside lambdas (see
+[Lambda Functions](#lambda-functions)).
+
 ## Modules
 
 `import` loads another `.kos` file as a module and binds it to a name:
@@ -351,8 +417,8 @@ There are no block comments.
 
 The following words cannot be used as identifiers:
 
-`if` `elseif` `else` `while` `for` `foreach` `fn` `return` `local` `const`
-`true` `false` `null` `and` `or` `not` `in` `break` `continue` `class`
+`if` `elseif` `else` `while` `for` `foreach` `fn` `wrapper` `return` `local`
+`const` `true` `false` `null` `and` `or` `not` `in` `break` `continue` `class`
 `extends` `new` `static` `public` `private` `this` `super` `constructor`
 `import` `as` `error` `throw` `try` `catch` `finally`
 

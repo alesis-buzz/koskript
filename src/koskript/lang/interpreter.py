@@ -174,9 +174,12 @@ class KoskriptInterpreter(object):
                     raise Errors.RuntimeError(
                         f"'{name}' is static, call it as '{container.klass.name}.{name}()'")
                 self._check_private(info, info.defining_class)
-                return info.code(
-                    self, info.closure, values,
-                    Frame(instance=container, klass=info.defining_class, info=info))
+                if info.decorated is None:
+                    return info.code(
+                        self, info.closure, values,
+                        Frame(instance=container, klass=info.defining_class,
+                              info=info))
+                return self._invoke_method_values(info, container, values)
 
             found = container.klass.find_field(name)
             if found is None:
@@ -210,9 +213,34 @@ class KoskriptInterpreter(object):
         raise Errors.RuntimeError("'this' can only be used inside an instance method")
 
     def _invoke_method_values(self, info: MethodInfo, instance, values: list):
+        decorated = info.decorated
+        if decorated is not None:
+            frames = self.method_frames
+            frame = Frame(instance=instance, klass=info.defining_class,
+                          info=info)
+            frames.append(frame)
+            try:
+                # Wrappers created at class-definition time also get the
+                # invocation frame, so `this` and `::Method()` work in them.
+                if type(decorated) is Function:
+                    return decorated.code(self, decorated.closure, values, frame)
+                return self.call_value(decorated, values)
+            finally:
+                frames.pop()
         return info.code(
             self, info.closure, values,
             Frame(instance=instance, klass=info.defining_class, info=info))
+
+    def apply_decorators(self, env, decorators: list, value):
+        """Apply ``@decorator`` expressions to ``value``, bottom-up.
+
+        Each item in ``decorators`` is a compiled ``(env) -> decorator``
+        callable, listing the decorators from top to bottom, so they are
+        applied in reverse order: ``@a @b fn f`` is ``a(b(f))``.
+        """
+        for decorator in reversed(decorators):
+            value = self.call_value(decorator(env), [value])
+        return value
 
     def _current_frame(self):
         return self.method_frames[-1] if self.method_frames else None
@@ -267,7 +295,7 @@ class KoskriptInterpreter(object):
             klass.field_count += 1
             klass.fields[info.name] = info
 
-        for method, code in method_specs:
+        for method, code, decorators in method_specs:
             info = MethodInfo(
                 method.name, method.params, method.body,
                 method.modifiers, is_constructor=False
@@ -292,6 +320,9 @@ class KoskriptInterpreter(object):
             info.defining_class = klass
             info.closure = klass.closure
             info.code = code
+            if decorators:
+                info.decorated = self.apply_decorators(
+                    closure, decorators, MethodTarget(self, info))
             klass.methods[info.name] = info
 
         if constructor_count > 1:

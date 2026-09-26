@@ -203,6 +203,46 @@ class KoskriptTransformer(Transformer):
             body=block
         )
 
+    def wrapper_def(self, tree):
+        name, params, block = tree
+        return FnDef(
+            name=name.name,
+            params=params,
+            body=block,
+            implicit_return=True
+        )
+
+    def wrapper_def_nargs(self, tree):
+        name, block = tree
+        return FnDef(
+            name=name.name,
+            params=[],
+            body=block,
+            implicit_return=True
+        )
+
+    # decorators
+    def decorator_plain(self, tree):
+        return NameRef(name=tree[0].name)
+
+    def decorator_call(self, tree):
+        name = tree[0]
+        args = tree[1] if len(tree) > 1 else []
+        return FnCall(name=NameRef(name=name.name), args=args)
+
+    @staticmethod
+    def _decorated_definition(tree):
+        return tree[-1]._replace(decorators=list(tree[:-1]))
+
+    def decorated_fn(self, tree):
+        return self._decorated_definition(tree)
+
+    def decorated_wrapper(self, tree):
+        return self._decorated_definition(tree)
+
+    def decorated_method(self, tree):
+        return self._decorated_definition(tree)
+
     def const_decl(self, tree):
         name, expr = tree
         return ConstDecl(name=name.name, value=expr)

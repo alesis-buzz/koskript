@@ -49,7 +49,8 @@ ConstDecl = namedtuple("ConstDecl", ["name", "value"])
 DeclStmt = namedtuple("DeclStmt", ["name", "value"])
 MemberAssign = namedtuple("MemberAssign", ["target", "attr", "value"])
 ReturnStmt = namedtuple("ReturnStmt", ["value"])
-FnDef  = namedtuple("FnDef",  ["name", "params", "body"])
+FnDef  = namedtuple("FnDef",  ["name", "params", "body", "decorators", "implicit_return"],
+                    defaults=((), False))
 FnCall = namedtuple("FnCall", ["name", "args"])
 LambdaFnDef = namedtuple("LambdaFnDef", ["params", "body"])
 ImportStmt = namedtuple("ImportStmt", ["path", "name"])
@@ -62,7 +63,8 @@ TryStmt = namedtuple("TryStmt", ["body", "catch_name", "catch_body", "finally_bo
 # Class objects
 ClassDef = namedtuple("ClassDef", ["name", "parent", "fields", "methods", "constructors"])
 ClassField = namedtuple("ClassField", ["name", "value", "modifiers"])
-ClassMethod = namedtuple("ClassMethod", ["name", "params", "body", "modifiers", "is_constructor"])
+ClassMethod = namedtuple("ClassMethod", ["name", "params", "body", "modifiers", "is_constructor", "decorators"],
+                         defaults=((),))
 
 # Class expressions
 NewExpr = namedtuple("NewExpr", ["class_name", "args"])
@@ -160,16 +162,26 @@ class Function(object):
     """A compiled Koskript function or lambda.
 
     ``code`` is a closure ``(interpreter, closure_scope, values, frame) -> result``.
+    ``interp`` lets host Python code call the function directly: ``fn(1, 2)``.
     """
 
-    __slots__ = ("params", "code", "closure", "frame", "name")
+    __slots__ = ("params", "code", "closure", "frame", "name", "interp")
 
-    def __init__(self, params, code, closure, frame=None, name="<lambda>"):
+    def __init__(self, params, code, closure, frame=None, name="<lambda>",
+                 interp=None):
         self.params = params
         self.code = code
         self.closure = closure
         self.frame = frame
         self.name = name
+        self.interp = interp
+
+    def __call__(self, *args):
+        interp = self.interp
+        if interp is None:
+            raise Errors.RuntimeError(
+                f"function '{self.name}' is not bound to a runtime")
+        return interp.call_value(self, list(args))
 
     def __repr__(self):
         return f"<function {self.name}>"
@@ -245,10 +257,15 @@ class KoskriptObject(object):
 
 
 class MethodInfo(object):
-    """A method declared inside a class."""
+    """A method declared inside a class.
+
+    ``decorated`` is the callable installed by the method decorators, if any;
+    invocation then goes through it instead of calling ``code`` directly.
+    """
 
     __slots__ = ("name", "params", "body", "visibility", "static",
-                 "is_constructor", "defining_class", "closure", "code")
+                 "is_constructor", "defining_class", "closure", "code",
+                 "decorated")
 
     def __init__(self, name: str, params: list, body: list, modifiers: list = None,
                  is_constructor: bool = False):
@@ -262,10 +279,37 @@ class MethodInfo(object):
         self.defining_class = None
         self.closure = None
         self.code = None
+        self.decorated = None
 
     def __repr__(self):
         kind = "constructor" if self.is_constructor else ("static method" if self.static else "method")
         return f"MethodInfo({kind} {self.name})"
+
+
+class MethodTarget(object):
+    """The raw method value handed to decorators.
+
+    Calling it runs the original method using the instance of the current
+    call frame, so decorator wrappers can forward calls with ``target(...)``
+    while keeping ``this`` and ``super`` working.
+    """
+
+    __slots__ = ("interp", "info")
+
+    def __init__(self, interp, info: MethodInfo):
+        self.interp = interp
+        self.info = info
+
+    def __call__(self, *values):
+        frame = self.interp._current_frame()
+        instance = None if frame is None else frame.instance
+        return self.info.code(
+            self.interp, self.info.closure, list(values),
+            Frame(instance=instance, klass=self.info.defining_class,
+                  info=self.info))
+
+    def __repr__(self):
+        return f"<method target {self.info.name}>"
 
 
 class FieldInfo(object):

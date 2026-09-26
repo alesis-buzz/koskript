@@ -1,6 +1,6 @@
 // ── Terminals ──────────────────────────────────────────────
 // NAME excludes reserved words (keyword reservation).
-NAME      : /(?!(?:if|elseif|else|while|for|foreach|fn|return|local|const|true|false|null|and|or|not|in|break|continue|class|extends|new|static|public|private|this|super|constructor|import|as|error|throw|try|catch|finally)\b)[a-zA-Z_][a-zA-Z0-9_]*/
+NAME      : /(?!(?:if|elseif|else|while|for|foreach|fn|wrapper|return|local|const|true|false|null|and|or|not|in|break|continue|class|extends|new|static|public|private|this|super|constructor|import|as|error|throw|try|catch|finally)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 NUMBER    : /[0-9]+(\.[0-9]+)?/
 STRING    : /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/
 COMMENT   : /\/\/[^\n]*/
@@ -25,7 +25,10 @@ map: "{" [map_obj ("," map_obj)* [","]] "}"
 ?statement    : local_decl
             | const_decl
             | class_def
+            | decorated_fn
             | fn_def
+            | decorated_wrapper
+            | wrapper_def
             | error_def
             | import_stmt
             | return_stmt
@@ -70,8 +73,20 @@ class_def     : "class" NAME class_body -> class_def_simple
 class_body    : "{" class_member* "}"
 
 ?class_member : field_decl
+              | decorated_method
               | method_def
               | constructor_def
+
+// ── Decorators ─────────────────────────────────────────────
+// `@Name` / `@Name(args)` placed above a function or method wraps it,
+// like Python decorators: `@Name` is `fn = Name(fn)` and
+// `@Name(args)` is `fn = Name(args)(fn)`.
+decorator     : "@" NAME "(" [arg_list] ")" -> decorator_call
+              | "@" NAME -> decorator_plain
+
+decorated_fn      : decorator+ fn_def
+decorated_wrapper : decorator+ wrapper_def
+decorated_method  : decorator+ method_def
 
 modifier      : "static"  -> mod_static
               | "public"  -> mod_public
@@ -89,6 +104,12 @@ constructor_def : modifier* "constructor" "(" param_list ")" block -> constructo
 // ── Function definition ────────────────────────────────────
 fn_def       : "fn" NAME "(" param_list ")" block
             | "fn" NAME "(" ")" block -> fn_def_nargs
+
+// ── Wrapper definition ─────────────────────────────────────
+// A wrapper is a function whose last expression is returned
+// implicitly. It is meant to be used as a decorator.
+wrapper_def  : "wrapper" NAME "(" param_list ")" block
+            | "wrapper" NAME "(" ")" block -> wrapper_def_nargs
 
 param_list : NAME ("," NAME)*
 

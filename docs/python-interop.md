@@ -109,6 +109,40 @@ Details and limits:
 - Exceptions raised inside Python code propagate to the host as regular Python
   exceptions; they are not wrapped in `koskript.Errors`.
 
+## Python wrappers and decorators
+
+Any registered Python callable can be used as a decorator from scripts.
+Koskript wrappers are plain functions, so they can also be called from Python
+directly:
+
+```python
+def logged(fn):
+    def wrapper(*args):
+        print("before")
+        return fn(*args)
+    return wrapper
+
+
+runtime = KoskriptRuntime({"logged": logged})
+runtime.execute("""
+@logged
+fn greet(name) { return "hi " + name }
+
+wrapper add_two(x) { x + 2 }
+""")
+
+runtime.execute('greet("Ana")')   # prints "before", returns "hi Ana"
+runtime["add_two"](3)             # 5
+```
+
+Decorator factories work as well: `@prefixed(">> ")` calls `prefixed(">> ")`
+first and applies the returned callable to the function. Decorators run once,
+when the definition executes.
+
+When a Python decorator wraps a Koskript method, calling the target value from
+Python runs the original method with its instance bound, so `this` and
+`::Method()` keep working inside it.
+
 ## Type names
 
 `type(value)` returns a Koskript type name for native values and the Python

@@ -94,6 +94,14 @@ runtime["double"]        # Python function back on the host side
 Assigning with `runtime["name"] = value` is equivalent to `register`, and
 registering a name that already exists replaces it.
 
+Script functions (including wrappers and decorated functions) are read back as
+callables, so Python can invoke them directly:
+
+```python
+runtime.execute("wrapper add_two(x) { x + 2 }")
+runtime["add_two"](3)   # 5
+```
+
 ## Error handling
 
 Script errors are raised as exceptions under `koskript.Errors`:

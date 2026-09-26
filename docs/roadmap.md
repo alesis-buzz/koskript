@@ -8,6 +8,7 @@ and the known limitations.
 - Dynamic typing: `int`, `float`, `string`, `bool`, `null`, `array`, `map`
 - `local` / `const` with block-level **lexical scoping** and closures
 - Functions, recursion and lambda expressions
+- Wrappers with implicit return and Python-style decorators (`@wrapper`, `@wrapper(args)`) on functions and methods
 - `if` / `elseif` / `else`
 - `while`, `for`, `foreach` loops with `break` / `continue`
 - Member access and index access

@@ -39,6 +39,7 @@ array.each(names, (name) { print("hello " + name) })
 - Error handling with `error` declarations, `throw`, `try` / `catch` / `finally`.
 - Member access and index access.
 - First-class functions and lambda expressions.
+- Wrappers with implicit return and Python-style decorators (`@wrapper`).
 - Arithmetic, comparison and logical operators.
 - Embeddable in any Python application.
 
@@ -65,7 +66,7 @@ Koskript requires Python 3.10+ and [Lark](https://github.com/lark-parser/lark).
 | Document | What it covers |
 |---|---|
 | [Getting started](docs/getting-started.md) | Installation, first script, a complete example |
-| [Language reference](docs/language.md) | Types, variables, operators, control flow, errors, functions, closures, modules, loops, strings |
+| [Language reference](docs/language.md) | Types, variables, operators, control flow, errors, functions, wrappers, closures, modules, loops, strings |
 | [Classes](docs/classes.md) | Inheritance, visibility, static members, constructors, `super` |
 | [Standard library](docs/standard-library.md) | Core builtins and the `map`, `array`, `string`, `math` and `json` namespaces |
 | [Python interop](docs/python-interop.md) | Exposing Python values, callables and classes to scripts |
