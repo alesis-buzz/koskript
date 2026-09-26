@@ -557,6 +557,14 @@ class KoskriptInterpreter(object):
                     f"module '{container.name}' has no member '{attr}'")
             return scope.values[index]
 
+        if kind is Namespace:
+            scope = container.scope
+            index = scope.meta.names.get(attr)
+            if index is None or scope.values[index] is UNBOUND:
+                raise Errors.RuntimeError(
+                    f"namespace '{container.name}' has no member '{attr}'")
+            return scope.values[index]
+
         if container is None:
             raise Errors.MismatchType("cannot access members on null")
 
@@ -610,6 +618,10 @@ class KoskriptInterpreter(object):
                 raise Errors.ProtectedObject("cannot modify a constant value.")
             scope.values[index] = value
             return
+
+        if kind is Namespace:
+            raise Errors.ProtectedObject(
+                f"namespace '{container.name}' members cannot be modified")
 
         if container is None:
             raise Errors.MismatchType("cannot assign members on null")

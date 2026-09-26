@@ -1,6 +1,7 @@
 from lark import Lark
 from lark.exceptions import LarkError, UnexpectedInput
-from .lang.emtypes import KoskriptObject, Module, Scope, ScopeInfo, ThrownSignal
+from .lang.emtypes import (KoskriptObject, Module, Namespace, Scope, ScopeInfo,
+                           ThrownSignal)
 from .lang.interpreter import KoskriptInterpreter
 from .lang.astgen import KoskriptTransformer
 from .lang.errors import Errors
@@ -58,6 +59,7 @@ class KoskriptRuntime(object):
         self.__interpreter__.module_loader = self._load_module
         self._modules = {}
         self._loading = []
+        self._import_paths = []
 
         if stdlib:
             self.register_many(build_globals(self.__interpreter__.call_value))
@@ -86,6 +88,22 @@ class KoskriptRuntime(object):
     def __getitem__(self, name: str):
         return self.__interpreter__.get_global(name).value
 
+    def add_import_path(self, path: str):
+        """Add a directory that ``import`` searches after the base directory.
+
+        The base directory is the one of the file that contains the ``import``
+        (or the current working directory for ``execute``). Added paths are
+        searched in the order they were registered, so a module next to the
+        importer always wins. Returns the runtime so calls can be chained.
+        """
+        real = os.path.realpath(path)
+        if not os.path.isdir(real):
+            raise Errors.RuntimeError(
+                f"import path '{path}' is not a directory")
+        if real not in self._import_paths:
+            self._import_paths.append(real)
+        return self
+
     def execute(self, code: str):
         """Parse and run ``code``.
 
@@ -93,7 +111,8 @@ class KoskriptRuntime(object):
         top-level ``return`` if the script uses one.
 
         ``import "name"`` inside the script resolves against the current
-        working directory of the Python process.
+        working directory of the Python process, then against the directories
+        added with :meth:`add_import_path`.
 
         Raises ``Errors.SyntaxError`` if the code cannot be parsed.
         """
@@ -124,18 +143,28 @@ class KoskriptRuntime(object):
             ast = [ast]
         return ast
 
+    def _module_candidates(self, path: str, base_dir: str) -> list:
+        """Absolute paths tried for ``import "path"``, in search order."""
+        bases = [None] if os.path.isabs(path) else [base_dir, *self._import_paths]
+        candidates = []
+        for base in bases:
+            candidate = path if base is None else os.path.join(base, path)
+            if not candidate.lower().endswith(".kos") \
+                    and not os.path.isfile(candidate):
+                candidate += ".kos"
+            candidates.append(os.path.realpath(candidate))
+        return candidates
+
     def _load_module(self, path: str, base_dir: str = None):
         if base_dir is None:
             base_dir = os.getcwd()
 
-        candidate = path if os.path.isabs(path) else os.path.join(base_dir, path)
-        if not candidate.lower().endswith(".kos") and not os.path.isfile(candidate):
-            candidate += ".kos"
-        real = os.path.realpath(candidate)
-
-        if not os.path.isfile(real):
+        candidates = self._module_candidates(path, base_dir)
+        real = next((item for item in candidates if os.path.isfile(item)), None)
+        if real is None:
+            looked = ", ".join(f"'{item}'" for item in candidates)
             raise Errors.RuntimeError(
-                f"module '{path}' not found (looked for '{real}')")
+                f"module '{path}' not found (looked for {looked})")
 
         cached = self._modules.get(real)
         if cached is not None:
@@ -190,5 +219,5 @@ def run(code: str, globals_map: dict = None, stdlib: bool = True, **kwargs):
     return KoskriptRuntime(merged, stdlib=stdlib).execute(code)
 
 
-__all__ = ["KoskriptRuntime", "KoskriptObject", "Module", "Errors", "run",
-           "build_globals"]
+__all__ = ["KoskriptRuntime", "KoskriptObject", "Module", "Namespace",
+           "Errors", "run", "build_globals"]

@@ -66,6 +66,29 @@ Modules are cached per runtime: executing the same file again returns the same
 `Module`. A missing file raises `Errors.RuntimeError`; a circular import raises
 `Errors.RuntimeError` too.
 
+## Import paths
+
+`import` searches first next to the file that contains it (or the process
+working directory for `execute()`). `add_import_path()` registers extra
+directories that are searched afterwards, in the order they were added:
+
+```python
+runtime = KoskriptRuntime()
+
+runtime.add_import_path("shared/libs")           # relative to the cwd
+runtime.add_import_path("/srv/koskript/modules") # absolute paths work too
+
+runtime.execute('import "utils"\nutils.hello()')
+```
+
+- A module found in an added path can still import its siblings with
+  `import "sibling"`: nested imports resolve against that module's own folder.
+- If the same module exists next to the importer and in an added path, the
+  importer's folder wins.
+- The path must be an existing directory; anything else raises
+  `Errors.RuntimeError`. `add_import_path()` returns the runtime, so it can be
+  chained.
+
 ## One-shot scripts
 
 `run()` keeps your process clean when you just need to evaluate a snippet:

@@ -15,6 +15,7 @@
 | `class` | A class object |
 | `instance` | An instance of a class |
 | `module` | A module loaded with `import` |
+| `namespace` | A namespace declared with `namespace` |
 
 `type(value)` returns the name of a value's type as a string. Values coming
 from Python report their Python type name instead.
@@ -197,6 +198,44 @@ Where imports are searched depends on how the code was started:
 Nested imports are always resolved against the directory of the module that
 contains them, so a module in `modules/app.kos` can import its sibling with
 `import "helpers"` regardless of the process working directory.
+
+The host application can register extra search directories with
+`runtime.add_import_path("dir")`; they are searched after the importer's own
+directory, in the order they were added. See the
+[Embedding guide](embedding.md#import-paths).
+
+## Namespaces
+
+A `namespace` groups declarations under a name so they can be organized without
+creating a module:
+
+```koskript
+namespace Utils {
+    const MAX = 3
+
+    fn double(x) { return x * 2 }
+
+    class Point {
+        public x = 0
+        constructor(x) { this.x = x }
+    }
+}
+
+print(Utils.double(21))       // 42
+print(Utils.MAX)              // 3
+print(new Utils.Point(1).x)   // 1
+```
+
+- Namespaces can only contain declarations: `fn`, `wrapper`, `class`, `const`,
+  `error`, `import` and nested namespaces.
+- Members reference each other by short name and can also read the enclosing
+  scope, including locals of the function that declares the namespace.
+- Members are read-only from the outside: `Utils.MAX = 4` raises
+  `ProtectedObject`.
+- Namespaces can be nested: `App.Utils.double(2)`.
+- The qualified forms `new Namespace.Class(...)` and
+  `class Child extends Namespace.Base` work anywhere.
+- `type(Utils)` is `"namespace"`.
 
 ## Operators
 
@@ -420,7 +459,7 @@ The following words cannot be used as identifiers:
 `if` `elseif` `else` `while` `for` `foreach` `fn` `wrapper` `return` `local`
 `const` `true` `false` `null` `and` `or` `not` `in` `break` `continue` `class`
 `extends` `new` `static` `public` `private` `this` `super` `constructor`
-`import` `as` `error` `throw` `try` `catch` `finally`
+`import` `as` `error` `throw` `try` `catch` `finally` `namespace`
 
 Because they are reserved, member names such as `array.foreach` are not
 possible; the standard library uses `array.each` instead.

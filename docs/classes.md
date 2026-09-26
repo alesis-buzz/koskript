@@ -66,7 +66,7 @@ print(Dog.kingdom())       // animalia (statics always use `.`)
 | `Class.Method()` | Calls a static method from outside (statics never use `::`). |
 | `super::Method()` | Calls the parent implementation. |
 | `super::constructor(args)` | Calls the parent constructor (only inside a constructor). |
-| `new Class(args)` | Expression that creates an instance. |
+| `new Class(args)` | Expression that creates an instance. The class can be qualified: `new Namespace.Class(args)`. |
 
 ## Rules
 

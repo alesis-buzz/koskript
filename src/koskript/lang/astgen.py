@@ -27,6 +27,15 @@ def _unescape(raw: str) -> str:
     return "".join(out)
 
 
+def _qualified_name(node) -> str:
+    """Display name for a simple or dotted reference node."""
+    if type(node) is NameRef:
+        return node.name
+    if type(node) is MemberAccess:
+        return _qualified_name(node.name) + "." + node.attrs[-1].name
+    return str(node)
+
+
 class KoskriptTransformer(Transformer):
     def start(self, tree): return (tree)
 
@@ -45,9 +54,15 @@ class KoskriptTransformer(Transformer):
     def this_ref(self, tree): return ThisRef()
 
     def new_expr(self, tree):
-        name = tree[0]
+        target = tree[0]
         args = tree[1] if len(tree) > 1 else []
-        return NewExpr(class_name=name.name, args=args)
+        return NewExpr(target=target, args=args, label=_qualified_name(target))
+
+    def dotted_name(self, tree):
+        node = tree[0]
+        for item in tree[1:]:
+            node = MemberAccess(name=node, attrs=[item])
+        return node
 
     def method_call(self, tree):
         name = tree[0]
@@ -223,12 +238,12 @@ class KoskriptTransformer(Transformer):
 
     # decorators
     def decorator_plain(self, tree):
-        return NameRef(name=tree[0].name)
+        return tree[0]
 
     def decorator_call(self, tree):
-        name = tree[0]
+        target = tree[0]
         args = tree[1] if len(tree) > 1 else []
-        return FnCall(name=NameRef(name=name.name), args=args)
+        return FnCall(name=target, args=args)
 
     @staticmethod
     def _decorated_definition(tree):
@@ -305,18 +320,22 @@ class KoskriptTransformer(Transformer):
     def class_body(self, tree):
         return list(tree)
 
+    def namespace_def(self, tree):
+        name, block = tree
+        return NamespaceDef(name=name.name, body=block)
+
     def class_def_simple(self, tree):
         name = tree[0]
         body = tree[1] if len(tree) > 1 else []
-        return self._build_class(name.name, None, body)
+        return self._build_class(name.name, None, None, body)
 
     def class_def_extends(self, tree):
         name, parent = tree[0], tree[1]
         body = tree[2] if len(tree) > 2 else []
-        return self._build_class(name.name, parent.name, body)
+        return self._build_class(name.name, parent, _qualified_name(parent), body)
 
     @staticmethod
-    def _build_class(name, parent, members):
+    def _build_class(name, parent, parent_name, members):
         fields, methods, constructors = [], [], []
         for member in members:
             if isinstance(member, ClassField):
@@ -329,6 +348,7 @@ class KoskriptTransformer(Transformer):
         return ClassDef(
             name=name,
             parent=parent,
+            parent_name=parent_name,
             fields=fields,
             methods=methods,
             constructors=constructors

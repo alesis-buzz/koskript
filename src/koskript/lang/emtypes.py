@@ -61,13 +61,16 @@ ThrowStmt = namedtuple("ThrowStmt", ["value"])
 TryStmt = namedtuple("TryStmt", ["body", "catch_name", "catch_body", "finally_body"])
 
 # Class objects
-ClassDef = namedtuple("ClassDef", ["name", "parent", "fields", "methods", "constructors"])
+ClassDef = namedtuple("ClassDef", ["name", "parent", "parent_name", "fields", "methods", "constructors"])
 ClassField = namedtuple("ClassField", ["name", "value", "modifiers"])
 ClassMethod = namedtuple("ClassMethod", ["name", "params", "body", "modifiers", "is_constructor", "decorators"],
                          defaults=((),))
 
+# Namespaces
+NamespaceDef = namedtuple("NamespaceDef", ["name", "body"])
+
 # Class expressions
-NewExpr = namedtuple("NewExpr", ["class_name", "args"])
+NewExpr = namedtuple("NewExpr", ["target", "args", "label"])
 ThisRef = namedtuple("ThisRef", [])
 MethodCall = namedtuple("MethodCall", ["name", "args"])
 BoundMethodCall = namedtuple("BoundMethodCall", ["target", "name", "args"])
@@ -461,6 +464,38 @@ class Module(object):
 
     def __repr__(self):
         return f"<module {self.name}>"
+
+
+class Namespace(object):
+    """A named group of declarations.
+
+    Namespaces only organize code: their members are read from the scope they
+    were declared in and cannot be reassigned from the outside.
+    """
+
+    __slots__ = ("name", "scope")
+
+    def __init__(self, name: str, scope: Scope):
+        self.name = name
+        self.scope = scope
+
+    def get(self, name: str):
+        scope = self.scope
+        index = scope.meta.names.get(name)
+        if index is None or scope.values[index] is UNBOUND:
+            raise Errors.RuntimeError(
+                f"namespace '{self.name}' has no member '{name}'")
+        return scope.values[index]
+
+    def __getitem__(self, name: str):
+        return self.get(name)
+
+    def __contains__(self, name: str) -> bool:
+        index = self.scope.meta.names.get(name)
+        return index is not None and self.scope.values[index] is not UNBOUND
+
+    def __repr__(self):
+        return f"<namespace {self.name}>"
 
 
 def _resolve_modifiers(name: str, modifiers: list):

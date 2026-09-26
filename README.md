@@ -28,11 +28,13 @@ array.each(names, (name) { print("hello " + name) })
 
 - Dynamic typing.
 - Block-level lexical scoping with `local` declarations.
+- Namespaces (`namespace Name { ... }`) to group declarations.
 - Closures that capture their defining scope, including `this` inside methods.
 - Constants with `const`.
 - Classes with inheritance, visibility, static methods and constructors.
 - Standard library: core builtins plus `map`, `array`, `string`, `math` and `json`.
 - Module imports with per-module resolution (`import "utils"`).
+- Configurable import search paths (`runtime.add_import_path`).
 - Native Python interop for functions, objects and classes.
 - `if`, `elseif`, `else`.
 - `while`, `for`, `foreach` loops with `break` / `continue`.
@@ -66,7 +68,7 @@ Koskript requires Python 3.10+ and [Lark](https://github.com/lark-parser/lark).
 | Document | What it covers |
 |---|---|
 | [Getting started](docs/getting-started.md) | Installation, first script, a complete example |
-| [Language reference](docs/language.md) | Types, variables, operators, control flow, errors, functions, wrappers, closures, modules, loops, strings |
+| [Language reference](docs/language.md) | Types, variables, operators, control flow, errors, functions, wrappers, namespaces, closures, modules, loops, strings |
 | [Classes](docs/classes.md) | Inheritance, visibility, static members, constructors, `super` |
 | [Standard library](docs/standard-library.md) | Core builtins and the `map`, `array`, `string`, `math` and `json` namespaces |
 | [Python interop](docs/python-interop.md) | Exposing Python values, callables and classes to scripts |

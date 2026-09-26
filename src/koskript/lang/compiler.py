@@ -27,8 +27,12 @@ _RESERVED_NAMES = frozenset((
     "local", "const", "true", "false", "null", "and", "or", "not", "in",
     "break", "continue", "class", "extends", "new", "static", "public",
     "private", "this", "super", "constructor", "import", "as",
-    "error", "throw", "try", "catch", "finally",
+    "error", "throw", "try", "catch", "finally", "namespace",
 ))
+
+# Statements allowed inside a `namespace` body.
+_NAMESPACE_DECLARATIONS = (ConstDecl, FnDef, ClassDef, ErrorDef, ImportStmt,
+                           NamespaceDef)
 
 
 def module_binding_name(path: str) -> str:
@@ -215,9 +219,9 @@ class _Emitter(object):
         if kind is FnCall:
             return self._call(node, env)
         if kind is NewExpr:
-            target = self.read(node.class_name, env)
+            target = self.expr(node.target, env)
             args = self._arguments(node.args, env)
-            return f"_i.new_value({node.class_name!r}, ({target}), [{args}])"
+            return f"_i.new_value({node.label!r}, ({target}), [{args}])"
         if kind is MethodCall:
             args = self._arguments(node.args, env)
             return f"_i._method_call_values({node.name!r}, [{args}])"
@@ -279,6 +283,7 @@ class _Unit(object):
             "Scope": Scope,
             "Function": Function,
             "ErrorType": ErrorType,
+            "Namespace": Namespace,
             "Errors": Errors,
             "ReturnSignal": ReturnSignal,
             "BreakSignal": BreakSignal,
@@ -459,6 +464,8 @@ class _Unit(object):
             self._emit_fn_def(node, scope, env)
         elif kind is ClassDef:
             self._emit_class_def(node, scope, env)
+        elif kind is NamespaceDef:
+            self._emit_namespace_def(node, scope, env)
         elif kind is ImportStmt:
             self._emit_import(node, scope, env)
         elif kind is ReturnStmt:
@@ -583,12 +590,26 @@ class _Unit(object):
         constructor_const = "None" if constructor_spec is None \
             else self.add_const(constructor_spec)
         parent_source = "None" if node.parent is None \
-            else _Emitter(self.compiler, scope, unit=self).read(node.parent, env)
+            else _Emitter(self.compiler, scope, unit=self).expr(node.parent, env)
 
         self.line(
             f"{env}.values[{index}] = _i.define_class({node.name!r}, "
-            f"{node.parent!r}, {parent_source}, {env}, {fields_const}, "
+            f"{node.parent_name!r}, {parent_source}, {env}, {fields_const}, "
             f"{methods_const}, {constructor_const}, {len(node.constructors)})")
+
+    def _emit_namespace_def(self, node, scope, env):
+        for statement in node.body:
+            if type(statement) not in _NAMESPACE_DECLARATIONS:
+                raise Errors.RuntimeError(
+                    f"namespace '{node.name}' can only contain fn, wrapper, "
+                    "class, const, error, import and namespace declarations")
+        index = scope.names[node.name]
+        namespace_scope = ScopeInfo(scope)
+        self.compiler._predeclare(node.body, namespace_scope)
+        namespace_env = self.new_env(namespace_scope, env)
+        self.emit_statements(node.body, namespace_scope, namespace_env)
+        self.line(
+            f"{env}.values[{index}] = Namespace({node.name!r}, {namespace_env})")
 
     def _emit_while(self, node, scope, env):
         condition = self.inline_condition(node.condition, scope, env)
@@ -814,6 +835,8 @@ class Compiler(object):
             elif kind is ErrorDef:
                 scope.declare(stmt.name)
             elif kind is ClassDef:
+                scope.declare(stmt.name)
+            elif kind is NamespaceDef:
                 scope.declare(stmt.name)
             elif kind is ImportStmt:
                 scope.declare(stmt.name or module_binding_name(stmt.path))

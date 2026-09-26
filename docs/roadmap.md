@@ -15,6 +15,8 @@ and the known limitations.
 - Classes: inheritance, visibility, static methods, constructors, `super`
 - `try` / `catch` / `finally` with `throw` and user-defined `error` types
 - Module imports: `import "path"` with per-module resolution and caching
+- Host import paths: `KoskriptRuntime.add_import_path()` searched after the importer's folder
+- Namespaces: `namespace Name { ... }` with read-only members and qualified `new`/`extends`
 - Python interop: values, callables, objects and classes (dunder attributes are blocked)
 - [Standard library](standard-library.md): core builtins plus `map`, `array`, `string`, `math` and `json`
 - Compiled execution engine (AST to Python code) with lexical slot resolution
