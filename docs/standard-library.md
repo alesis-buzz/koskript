@@ -18,10 +18,10 @@ The standard library is registered **before** the globals you pass in, so your
 values always win. `runtime.register("print", sink)` overrides a name later as
 well.
 
-Namespaces (`map`, `array`, `string`, `math`, `json`) are plain maps created
-fresh for every runtime, so one runtime cannot corrupt another. A script can
-`math.pi = 3` and only that runtime is affected. You can replace a whole
-namespace by registering a map with the same name.
+Namespaces (`map`, `array`, `string`, `bytes`, `math`, `json`) are plain maps
+created fresh for every runtime, so one runtime cannot corrupt another. A
+script can `math.pi = 3` and only that runtime is affected. You can replace a
+whole namespace by registering a map with the same name.
 
 For custom setups, `build_globals()` returns a fresh dictionary with the whole
 standard library:
@@ -51,10 +51,10 @@ runtime.register_many(build_globals())
 
 | Function | Description |
 |---|---|
-| `print(values...)` | Writes to stdout (space separated, newline at the end). Override it to capture output. |
-| `len(value)` | Length of an array, map, string or any sized value. |
+| `print(values...)` | Writes to stdout (space separated, newline at the end). Bytes arguments are rendered as hex. Override it to capture output. |
+| `len(value)` | Length of an array, map, string, bytes or any sized value. |
 | `type(value)` | Type name as a string (see [Types](language.md#types)). |
-| `str(value)` | Human-readable string. Maps and arrays are formatted recursively; cycles render as `<cycle>`. |
+| `str(value)` | Human-readable string. Maps and arrays are formatted recursively; bytes render as hex (`0x616263`); cycles render as `<cycle>`. |
 | `int(value)` | Converts `bool`, `int`, `float` (truncates) or a numeric string. |
 | `float(value)` | Converts `bool`, `int`, `float` or a numeric string. |
 | `bool(value)` | Truthiness of any value. |
@@ -167,6 +167,35 @@ print(string.replace("a-b-c", "-", "+"))      // a+b+c
 print(string.pad_left("7", 3, "0"))           // 007
 print(string.contains("hello", "ell"))        // true
 ```
+
+## `bytes`
+
+| Function | Description |
+|---|---|
+| `bytes.from_string(s[, encoding])` | Encodes a string into bytes (UTF-8 by default). |
+| `bytes.to_string(b[, encoding])` | Decodes bytes into a string (UTF-8 by default). |
+| `bytes.hex(b)` | Hex string, including the `0x` prefix. |
+| `bytes.from_hex(s)` | Parses a hex string; the `0x` prefix is optional. |
+| `bytes.from_array(a)` | Bytes built from an array of ints between 0 and 255. |
+| `bytes.to_array(b)` | Array with the value of every byte (0-255). |
+| `bytes.contains(b, part)` | `true` if the byte sequence `part` appears in `b`. |
+| `bytes.slice(b, start[, end])` | New bytes with the range (negative indexes allowed). |
+
+```koskript
+print(str(bytes.from_string("hi")))     // 0x6869
+
+print(bytes.to_string(b"\xc3\xb1"))     // ñ
+print(bytes.hex(b"abc"))                // 0x616263
+print(bytes.from_hex("0x6162"))         // 0x6162
+
+local packed = bytes.from_array([104, 105])
+print(bytes.to_array(packed))           // [104, 105]
+print(bytes.contains(packed, b"i"))     // true
+print(bytes.slice(packed, 1))           // 0x69
+```
+
+Decoding invalid data or using an unknown encoding raises `RuntimeError`;
+wrong argument types raise `MismatchType`.
 
 ## `math`
 

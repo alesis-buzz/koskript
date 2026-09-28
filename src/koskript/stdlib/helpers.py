@@ -17,6 +17,8 @@ def type_name(value) -> str:
         return "float"
     if isinstance(value, str):
         return "string"
+    if isinstance(value, (bytes, bytearray)):
+        return "bytes"
     if isinstance(value, list):
         return "array"
     if isinstance(value, dict):

@@ -10,6 +10,8 @@ def to_string(value, seen=None):
         return "true" if value else "false"
     if isinstance(value, str):
         return value
+    if isinstance(value, (bytes, bytearray)):
+        return "0x" + bytes(value).hex()
     if isinstance(value, ErrorInstance):
         return str(value)
     if isinstance(value, int):
@@ -35,8 +37,10 @@ def to_string(value, seen=None):
 
 
 def _deep_copy(value, seen=None):
-    if value is None or isinstance(value, (bool, int, float, str)):
+    if value is None or isinstance(value, (bool, int, float, str, bytes)):
         return value
+    if isinstance(value, bytearray):
+        return bytearray(value)
     if not isinstance(value, (list, dict)):
         raise Errors.MismatchType(
             f"copy() only supports arrays, maps and primitive values, got {type_name(value)}")
@@ -114,6 +118,8 @@ def _bool(*args):
         return value != 0
     if isinstance(value, str):
         return value != ""
+    if isinstance(value, (bytes, bytearray)):
+        return len(value) > 0
     if isinstance(value, (list, dict)):
         return len(value) > 0
     return True
@@ -132,9 +138,16 @@ def _copy(*args):
     return _deep_copy(unary("copy", args))
 
 
+def _print(*values):
+    # Python's print is kept for every other type, so this only changes how
+    # bytes arguments are displayed (same hex form as str()).
+    print(*(to_string(value) if isinstance(value, (bytes, bytearray)) else value
+            for value in values))
+
+
 def build():
     return {
-        "print": print,
+        "print": _print,
         "len": _len,
         "type": _type,
         "str": _str,

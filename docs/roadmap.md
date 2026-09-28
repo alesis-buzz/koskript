@@ -5,7 +5,7 @@ and the known limitations.
 
 ## Done
 
-- Dynamic typing: `int`, `float`, `string`, `bool`, `null`, `array`, `map`
+- Dynamic typing: `int`, `float`, `string`, `bytes`, `bool`, `null`, `array`, `map`
 - `local` / `const` with block-level **lexical scoping** and closures
 - Functions, recursion and lambda expressions
 - Wrappers with implicit return and Python-style decorators (`@wrapper`, `@wrapper(args)`) on functions and methods
@@ -18,7 +18,7 @@ and the known limitations.
 - Host import paths: `KoskriptRuntime.add_import_path()` searched after the importer's folder
 - Namespaces: `namespace Name { ... }` with read-only members and qualified `new`/`extends`
 - Python interop: values, callables, objects and classes (dunder attributes are blocked)
-- [Standard library](standard-library.md): core builtins plus `map`, `array`, `string`, `math` and `json`
+- [Standard library](standard-library.md): core builtins plus `map`, `array`, `string`, `bytes`, `math` and `json`
 - Compiled execution engine (AST to Python code) with lexical slot resolution
 - PyPI package
 

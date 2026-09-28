@@ -1,4 +1,4 @@
-from . import arrays, core, jsonlib, mathlib, maps, strings
+from . import arrays, byteslib, core, jsonlib, mathlib, maps, strings
 
 
 def build_globals(call_value=None) -> dict:
@@ -8,6 +8,7 @@ def build_globals(call_value=None) -> dict:
     globals_map.update(maps.build())
     globals_map.update(arrays.build(call_value))
     globals_map.update(strings.build())
+    globals_map.update(byteslib.build())
     globals_map.update(mathlib.build())
     globals_map.update(jsonlib.build())
     return globals_map

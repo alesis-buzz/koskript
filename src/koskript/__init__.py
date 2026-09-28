@@ -1,5 +1,5 @@
 from lark import Lark
-from lark.exceptions import LarkError, UnexpectedInput
+from lark.exceptions import LarkError, UnexpectedInput, VisitError
 from .lang.emtypes import (KoskriptObject, Module, Namespace, Scope, ScopeInfo,
                            ThrownSignal)
 from .lang.interpreter import KoskriptInterpreter
@@ -132,12 +132,21 @@ class KoskriptRuntime(object):
         except ThrownSignal as signal:
             raise self.__interpreter__._uncaught(signal) from None
 
+    def _transform(self, tree):
+        """Run the AST transformer, unwrapping clean syntax errors."""
+        try:
+            return self.__ast__.transform(tree)
+        except VisitError as e:
+            if isinstance(e.orig_exc, Errors.SyntaxError):
+                raise e.orig_exc from None
+            raise
+
     def _compile(self, code: str):
         try:
             tree = grammar.parse(code)
         except LarkError as e:
             raise Errors.SyntaxError(_format_syntax_error(code, e)) from e
-        ast = self.__ast__.transform(tree)
+        ast = self._transform(tree)
 
         if not isinstance(ast, list):
             ast = [ast]
@@ -187,7 +196,10 @@ class KoskriptRuntime(object):
             raise Errors.SyntaxError(
                 f"module '{path}':\n{_format_syntax_error(code, e)}") from e
 
-        ast = self.__ast__.transform(tree)
+        try:
+            ast = self._transform(tree)
+        except Errors.SyntaxError as e:
+            raise Errors.SyntaxError(f"module '{path}':\n{e}") from None
         if not isinstance(ast, list):
             ast = [ast]
 

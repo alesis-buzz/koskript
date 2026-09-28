@@ -169,7 +169,8 @@ class _Emitter(object):
 
     def expr(self, node, env="env"):
         kind = type(node)
-        if kind is IntLit or kind is FloatLit or kind is StrLit or kind is BoolLit:
+        if kind is IntLit or kind is FloatLit or kind is StrLit \
+                or kind is BytesLit or kind is BoolLit:
             return repr(node.value)
         if kind is NullLit:
             return "None"
@@ -561,7 +562,7 @@ class _Unit(object):
             value_node = field.value
             kind = type(value_node)
             if kind is IntLit or kind is FloatLit or kind is StrLit \
-                    or kind is BoolLit or kind is NullLit:
+                    or kind is BytesLit or kind is BoolLit or kind is NullLit:
                 field_specs.append((field, None, None, value_node.value))
             else:
                 value = self.compiler._compile_expression(value_node, field_scope)

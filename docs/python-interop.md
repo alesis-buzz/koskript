@@ -151,7 +151,12 @@ type name for everything else:
 ```koskript
 type({})          // map
 type("x")         // string
+type(b"x")        // bytes
 ```
+
+Python `bytes` and `bytearray` values report `bytes` and render as hex, so
+they can be passed to scripts, indexed, iterated and converted with the
+[`bytes` namespace](standard-library.md#bytes).
 
 ```python
 runtime = KoskriptRuntime({"session": Session(), "Session": Session})

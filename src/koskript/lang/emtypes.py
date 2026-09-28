@@ -6,6 +6,7 @@ from typing import Any
 IntLit = namedtuple("IntLit", ["value"])
 FloatLit = namedtuple("FloatLit", ["value"])
 StrLit = namedtuple("StrLit", ["value"])
+BytesLit = namedtuple("BytesLit", ["value"])
 BoolLit = namedtuple("BoolLit", ["value"])
 NullLit = namedtuple("NullLit", ["value"])
 ArrayLit = namedtuple("ArrayLit", ["value"])

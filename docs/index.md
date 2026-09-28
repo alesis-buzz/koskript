@@ -12,9 +12,9 @@ you expose becomes available to them.
 | Document | What it covers |
 |---|---|
 | [Getting started](getting-started.md) | Installation, first script, a complete example |
-| [Language reference](language.md) | Types, variables, operators, control flow, errors, functions, wrappers, namespaces, closures, modules, loops, strings |
+| [Language reference](language.md) | Types, variables, operators, control flow, errors, functions, wrappers, namespaces, closures, modules, loops, strings, bytes |
 | [Classes](classes.md) | Inheritance, visibility, static members, constructors, `super` |
-| [Standard library](standard-library.md) | Core builtins and the `map`, `array`, `string`, `math` and `json` namespaces |
+| [Standard library](standard-library.md) | Core builtins and the `map`, `array`, `string`, `bytes`, `math` and `json` namespaces |
 | [Python interop](python-interop.md) | Exposing Python values, callables and classes to scripts |
 | [Embedding guide](embedding.md) | `KoskriptRuntime`, `run()`, error handling and stdlib activation |
 | [Roadmap](roadmap.md) | What is done, what is planned, known limitations |

@@ -7,6 +7,7 @@
 | `int` | Integer number |
 | `float` | Floating-point number |
 | `string` | Text string |
+| `bytes` | Binary data |
 | `bool` | `true` or `false` |
 | `null` | The absence of a value |
 | `array` | Ordered list |
@@ -18,7 +19,8 @@
 | `namespace` | A namespace declared with `namespace` |
 
 `type(value)` returns the name of a value's type as a string. Values coming
-from Python report their Python type name instead.
+from Python report their Python type name instead, except `bytes` and
+`bytearray`, which report `bytes`.
 
 ## Variables
 
@@ -439,10 +441,40 @@ print("line one\nline two")
 There is no string interpolation yet; concatenate with `+` or use
 `array.join` / `json.encode`.
 
+## Bytes
+
+`bytes` values hold binary data. Literals look like Python's, with a `b`
+prefix before the quotes:
+
+```koskript
+local empty = b""
+local text = b"Koskript"
+local binary = b"\x00\x01\xff"
+
+print(len(binary))     // 3
+print(binary[2])       // 255
+```
+
+Inside a bytes literal the escapes `\n`, `\t`, `\r`, `\0`, `\\`, `\"` and
+`\'` work like in strings, and `\xNN` inserts one arbitrary byte. Characters
+outside ASCII are encoded as UTF-8, so `b"ñ"` is the two bytes `\xc3\xb1`.
+
+- `+` concatenates two bytes values: `b"ab" + b"cd"` is `b"abcd"`.
+- Comparisons (`==`, `!=`, `<`, `>`, ...) compare the byte sequences.
+- `len(data)` is the number of bytes; `data[i]` returns the byte at `i` as an
+  `int` between 0 and 255 (negative indexes are allowed).
+- `for (byte in data)` iterates over those ints.
+- `str(data)` renders the data as hexadecimal: `str(b"abc")` is `"0x616263"`.
+  `print` uses the same form. `b""` renders as `"0x"`.
+
+The [`bytes` namespace](standard-library.md#bytes) converts between bytes,
+strings, hex strings and arrays of ints.
+
 ## Truthiness
 
-Conditions accept any value. `false`, `null`, `0`, `0.0`, `""`, `[]` and `{}`
-are falsy; everything else is truthy. `bool(value)` applies the same rules.
+Conditions accept any value. `false`, `null`, `0`, `0.0`, `""`, `b""`, `[]`
+and `{}` are falsy; everything else is truthy. `bool(value)` applies the same
+rules.
 
 ## Comments
 

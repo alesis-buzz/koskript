@@ -1,5 +1,6 @@
 from lark import Transformer
 from .emtypes import *
+from .errors import Errors
 
 _ESCAPES = {
     "n": "\n",
@@ -10,6 +11,8 @@ _ESCAPES = {
     '"': '"',
     "'": "'",
 }
+
+_HEX_DIGITS = "0123456789abcdefABCDEF"
 
 
 def _unescape(raw: str) -> str:
@@ -25,6 +28,37 @@ def _unescape(raw: str) -> str:
             out.append(ch)
             i += 1
     return "".join(out)
+
+
+def _unescape_bytes(raw: str) -> bytes:
+    """Turn the body of a ``b"..."`` literal into bytes.
+
+    Supports the same escapes as strings plus ``\\xNN`` for arbitrary byte
+    values. Characters outside ASCII are encoded as UTF-8.
+    """
+    out = bytearray()
+    i = 0
+    length = len(raw)
+    while i < length:
+        ch = raw[i]
+        if ch == "\\" and i + 1 < length:
+            nxt = raw[i + 1]
+            if nxt == "x":
+                digits = raw[i + 2:i + 4]
+                if len(digits) != 2 \
+                        or digits[0] not in _HEX_DIGITS \
+                        or digits[1] not in _HEX_DIGITS:
+                    raise ValueError(
+                        f"invalid bytes escape '\\x{digits}', expected \\xNN")
+                out.append(int(digits, 16))
+                i += 4
+                continue
+            out.extend(_ESCAPES.get(nxt, nxt).encode("utf-8"))
+            i += 2
+        else:
+            out.extend(ch.encode("utf-8"))
+            i += 1
+    return bytes(out)
 
 
 def _qualified_name(node) -> str:
@@ -47,6 +81,17 @@ class KoskriptTransformer(Transformer):
 
     def NAME(self, token): return NameRef(name=str(token))
     def STRING(self, token): return StrLit(value=_unescape(str(token)[1:-1]))
+
+    def BYTES(self, token):
+        text = str(token)
+        try:
+            value = _unescape_bytes(text[2:-1])
+        except ValueError as exc:
+            raise Errors.SyntaxError(
+                f"Syntax error at line {token.line}, "
+                f"column {token.column}: {exc}") from None
+        return BytesLit(value=value)
+
     def bool_true(self, tree): return BoolLit(value=True)
     def bool_false(self, tree): return BoolLit(value=False)
     def null_lit(self, tree): return NullLit(value=None)
