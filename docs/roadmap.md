@@ -49,9 +49,11 @@ Koskript compiles the AST into Python functions instead of walking the tree:
 statements become real Python loops/branches, expressions are inlined, and
 every lexical scope is resolved to numeric slots. Compared to the original
 tree-walking interpreter this is roughly **8-30x faster** depending on the
-workload; on `benchmark.py` the interpreter now runs between **4x and 24x**
+workload; on `benchmark.py` the interpreter now runs between **4x and 17x**
 slower than equivalent CPython code (it used to be 90-200x).
 
 Remaining hot spots are object/class heavy code (member access, method
-dispatch), so the work plan is: inline caches for member access, a custom
-parser to replace Lark, and a bytecode VM in the long term.
+dispatch) and function calls. Classes already flatten their inherited fields
+and methods into lookup caches and instance fields use direct slot access,
+so the work plan is: inline caches in the generated code for member access, a
+custom parser to replace Lark, and a bytecode VM in the long term.

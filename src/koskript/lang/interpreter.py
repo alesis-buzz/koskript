@@ -63,7 +63,7 @@ class KoskriptInterpreter(object):
 
     def _sync_scope(self, scope: Scope):
         values = scope.values
-        missing = len(scope.meta.names) - len(values)
+        missing = scope.meta.size - len(values)
         if missing > 0:
             values.extend([UNBOUND] * missing)
 
@@ -114,6 +114,11 @@ class KoskriptInterpreter(object):
         if kind is BoundMethod:
             return self._invoke_method_values(value.info, value.instance, values)
 
+        # Plain Python callables are the common interop case, so they are
+        # checked before the remaining Koskript runtime types.
+        if callable(value):
+            return value(*values)
+
         if kind is KoskriptObject:
             return self.call_value(value.value, values)
 
@@ -127,9 +132,6 @@ class KoskriptInterpreter(object):
         if kind is ErrorInstance:
             raise Errors.RuntimeError(
                 f"error '{value.type.name}' is not callable")
-
-        if callable(value):
-            return value(*values)
 
         raise Errors.MismatchType(f"{type(value).__name__} is not callable")
 
@@ -168,23 +170,24 @@ class KoskriptInterpreter(object):
     def call_member_values(self, container, name: str, values: list):
         """Call ``container.name(values)`` without materializing a bound method."""
         if type(container) is KoskriptInstance:
-            info = container.klass.find_method(name)
+            klass = container.klass
+            info = klass._methods_cache.get(name)
             if info is not None:
                 if info.static:
                     raise Errors.RuntimeError(
-                        f"'{name}' is static, call it as '{container.klass.name}.{name}()'")
-                self._check_private(info, info.defining_class)
+                        f"'{name}' is static, call it as '{klass.name}.{name}()'")
+                if info.visibility == "private":
+                    self._check_private(info, info.defining_class)
                 if info.decorated is None:
                     return info.code(
                         self, info.closure, values,
-                        Frame(instance=container, klass=info.defining_class,
-                              info=info))
+                        (container, info.defining_class, info))
                 return self._invoke_method_values(info, container, values)
 
-            found = container.klass.find_field(name)
+            found = klass._fields_cache.get(name)
             if found is None:
                 raise Errors.RuntimeError(
-                    f"'{name}' is not defined on '{container.klass.name}'")
+                    f"'{name}' is not defined on '{klass.name}'")
 
             defining_class, field = found
             if field.visibility == "private":
@@ -197,8 +200,14 @@ class KoskriptInterpreter(object):
         """Fast path for ``this.attr`` inside a method."""
         frames = self.method_frames
         if frames:
-            instance = frames[-1].instance
+            instance = frames[-1][0]
             if instance is not None:
+                found = instance.klass._fields_cache.get(attr)
+                if found is not None:
+                    defining_class, field = found
+                    if field.visibility == "private":
+                        self._check_private(field, defining_class)
+                    return instance.fields[field.slot]
                 return self._member_get(instance, attr)
         raise Errors.RuntimeError("'this' can only be used inside an instance method")
 
@@ -206,8 +215,15 @@ class KoskriptInterpreter(object):
         """Fast path for ``this.attr = value`` inside a method."""
         frames = self.method_frames
         if frames:
-            instance = frames[-1].instance
+            instance = frames[-1][0]
             if instance is not None:
+                found = instance.klass._fields_cache.get(attr)
+                if found is not None:
+                    defining_class, field = found
+                    if field.visibility == "private":
+                        self._check_private(field, defining_class)
+                    instance.fields[field.slot] = value
+                    return
                 self._member_set(instance, attr, value)
                 return
         raise Errors.RuntimeError("'this' can only be used inside an instance method")
@@ -216,8 +232,7 @@ class KoskriptInterpreter(object):
         decorated = info.decorated
         if decorated is not None:
             frames = self.method_frames
-            frame = Frame(instance=instance, klass=info.defining_class,
-                          info=info)
+            frame = (instance, info.defining_class, info)
             frames.append(frame)
             try:
                 # Wrappers created at class-definition time also get the
@@ -229,7 +244,7 @@ class KoskriptInterpreter(object):
                 frames.pop()
         return info.code(
             self, info.closure, values,
-            Frame(instance=instance, klass=info.defining_class, info=info))
+            (instance, info.defining_class, info))
 
     def apply_decorators(self, env, decorators: list, value):
         """Apply ``@decorator`` expressions to ``value``, bottom-up.
@@ -249,8 +264,8 @@ class KoskriptInterpreter(object):
         frames = self.method_frames
         if frames:
             frame = frames[-1]
-            if frame.instance is not None:
-                return frame.instance
+            if frame[0] is not None:
+                return frame[0]
         raise Errors.RuntimeError("'this' can only be used inside an instance method")
 
     def new_value(self, name, target, values: list):
@@ -344,60 +359,84 @@ class KoskriptInterpreter(object):
             constructor.code = code
             klass.constructor = constructor
 
+        # Classes are immutable once defined, so the inherited lookups can be
+        # flattened now and every field/method access is a plain dict lookup.
+        klass._build_lookup_cache()
         return klass
 
     def _instantiate(self, klass: KoskriptClass, values: list) -> KoskriptInstance:
         instance = KoskriptInstance(klass)
+
+        # Field initializers and their slots are fixed after the class is
+        # defined, so they are split into constant and dynamic groups and
+        # cached on first instantiation.
+        specs = klass._init_specs
+        if specs is None:
+            const_fields, dyn_fields = [], []
+            for defining_class in klass.mro():
+                closure = defining_class.closure
+                for info in defining_class.fields.values():
+                    if info.const is not UNBOUND:
+                        const_fields.append((info.slot, info.const))
+                    else:
+                        dyn_fields.append((info.slot, closure, info))
+            specs = (const_fields, dyn_fields)
+            klass._init_specs = specs
+
+        const_fields, dyn_fields = specs
+        fields = instance.fields
+        for slot, value in const_fields:
+            fields[slot] = value
+
         frames = self.method_frames
+        for slot, closure, info in dyn_fields:
+            env = Scope(closure, info.meta)
+            frames.append((instance, info.defining_class, None))
+            try:
+                fields[slot] = info.code(env)
+            finally:
+                frames.pop()
 
-        for defining_class in klass.mro():
-            closure = defining_class.closure
-            for name, info in defining_class.fields.items():
-                const = info.const
-                if const is not UNBOUND:
-                    instance.fields[info.slot] = const
-                    continue
-                env = Scope(closure, info.meta)
-                frames.append(Frame(instance=instance, klass=defining_class, info=None))
-                try:
-                    instance.fields[info.slot] = info.code(env)
-                finally:
-                    frames.pop()
-
-        constructor = klass.find_constructor()
-        if constructor is not None:
-            self._check_private(constructor, constructor.defining_class)
-            self._invoke_method_values(constructor, instance, values)
+        constructor = klass._ctor_cache
+        if constructor is None:
+            klass.find_constructor()
+            constructor = klass._ctor_cache
+        if constructor is not False:
+            if constructor.visibility == "private":
+                self._check_private(constructor, constructor.defining_class)
+            constructor.code(
+                self, constructor.closure, values,
+                (instance, constructor.defining_class, constructor))
 
         return instance
 
     def _method_call_values(self, name: str, values: list):
         frame = self._current_frame()
 
-        if frame is None or frame.klass is None:
+        if frame is None or frame[1] is None:
             raise Errors.RuntimeError("'::' can only be used inside a class method")
 
-        if frame.instance is None:
+        if frame[0] is None:
             raise Errors.RuntimeError(f"cannot call instance method '{name}' from a static method")
 
         # Private methods are resolved non-virtually in their defining class;
         # public ones use dynamic dispatch on the actual instance class.
         info = None
-        own = frame.klass.find_method(name)
+        own = frame[1].find_method(name)
         if own is not None and own.visibility == "private":
             info = own
 
         if info is None:
-            info = frame.instance.klass.find_method(name)
+            info = frame[0].klass.find_method(name)
 
         if info is None:
-            raise Errors.RuntimeError(f"method '{name}' is not defined in '{frame.klass.name}'")
+            raise Errors.RuntimeError(f"method '{name}' is not defined in '{frame[1].name}'")
 
         if info.static:
             raise Errors.RuntimeError(f"'{name}' is static, call it as .{name}()")
 
         self._check_private(info, info.defining_class)
-        return self._invoke_method_values(info, frame.instance, values)
+        return self._invoke_method_values(info, frame[0], values)
 
     def _bound_method_call_values(self, container, name: str, values: list):
         if type(container) is KoskriptInstance:
@@ -437,15 +476,15 @@ class KoskriptInterpreter(object):
     def _super_call_values(self, name: str, values: list):
         frame = self._current_frame()
 
-        if frame is None or frame.instance is None:
+        if frame is None or frame[0] is None:
             raise Errors.RuntimeError("'super::' can only be used inside an instance method")
 
-        parent = frame.klass.parent if frame.klass else None
+        parent = frame[1].parent if frame[1] else None
         if parent is None:
-            raise Errors.RuntimeError(f"class '{frame.klass.name}' has no parent class")
+            raise Errors.RuntimeError(f"class '{frame[1].name}' has no parent class")
 
         if name == "constructor":
-            if frame.info is None or not frame.info.is_constructor:
+            if frame[2] is None or not frame[2].is_constructor:
                 raise Errors.RuntimeError(
                     "'super::constructor()' can only be called from a constructor")
 
@@ -454,8 +493,8 @@ class KoskriptInterpreter(object):
                 raise Errors.RuntimeError(f"class '{parent.name}' has no constructor")
 
             self._check_private(constructor, constructor.defining_class)
-            self._invoke_method_values(constructor, frame.instance, values)
-            return frame.instance
+            self._invoke_method_values(constructor, frame[0], values)
+            return frame[0]
 
         info = parent.find_method(name)
         if info is None:
@@ -465,17 +504,17 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(f"'{name}' is static, call it as .{name}()")
 
         self._check_private(info, info.defining_class)
-        return self._invoke_method_values(info, frame.instance, values)
+        return self._invoke_method_values(info, frame[0], values)
 
     def _static_ref_value(self, name: str):
         frame = self._current_frame()
 
-        if frame is None or frame.klass is None:
+        if frame is None or frame[1] is None:
             raise Errors.RuntimeError("'.' static calls can only be used inside a class method")
 
-        info = frame.klass.find_method(name)
+        info = frame[1].find_method(name)
         if info is None:
-            raise Errors.RuntimeError(f"static method '{name}' is not defined in '{frame.klass.name}'")
+            raise Errors.RuntimeError(f"static method '{name}' is not defined in '{frame[1].name}'")
 
         if not info.static:
             raise Errors.RuntimeError(f"'{name}' is not static, call it as ::{name}()")
@@ -490,7 +529,7 @@ class KoskriptInterpreter(object):
             return
 
         frame = self._current_frame()
-        if frame is None or frame.klass is not defining_class:
+        if frame is None or frame[1] is not defining_class:
             raise Errors.RuntimeError(
                 f"'{info_or_field.name}' is private to '{defining_class.name}' and cannot be accessed from outside")
 
@@ -505,23 +544,24 @@ class KoskriptInterpreter(object):
                     f"no member with the value '{attr}' is defined on {container}")
 
         if kind is KoskriptInstance:
-            found = container.klass.find_field(attr)
+            klass = container.klass
+            found = klass._fields_cache.get(attr)
             if found is not None:
                 defining_class, field = found
                 if field.visibility == "private":
                     self._check_private(field, defining_class)
                 return container.fields[field.slot]
 
-            info = container.klass.find_method(attr)
+            info = klass._methods_cache.get(attr)
             if info is not None:
                 if info.static:
                     raise Errors.RuntimeError(
-                        f"'{attr}' is static, call it as '{container.klass.name}.{attr}()'")
+                        f"'{attr}' is static, call it as '{klass.name}.{attr}()'")
                 self._check_private(info, info.defining_class)
                 return BoundMethod(container, info)
 
             raise Errors.RuntimeError(
-                f"'{attr}' is not defined on '{container.klass.name}'")
+                f"'{attr}' is not defined on '{klass.name}'")
 
         if kind is ErrorInstance:
             fields = container.fields
@@ -589,10 +629,11 @@ class KoskriptInterpreter(object):
             return
 
         if kind is KoskriptInstance:
-            found = container.klass.find_field(attr)
+            klass = container.klass
+            found = klass._fields_cache.get(attr)
             if found is None:
                 raise Errors.RuntimeError(
-                    f"'{attr}' is not a field of '{container.klass.name}'")
+                    f"'{attr}' is not a field of '{klass.name}'")
 
             defining_class, field = found
             if field.visibility == "private":

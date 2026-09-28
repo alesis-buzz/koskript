@@ -126,18 +126,20 @@ UNBOUND = _Unbound()
 class ScopeInfo(object):
     """Static description of a scope: name -> slot and read-only slots."""
 
-    __slots__ = ("parent", "names", "readonly")
+    __slots__ = ("parent", "names", "readonly", "size")
 
     def __init__(self, parent=None):
         self.parent = parent
         self.names = {}
         self.readonly = set()
+        self.size = 0
 
     def declare(self, name: str, readonly: bool = False) -> int:
         index = self.names.get(name)
         if index is None:
             index = len(self.names)
             self.names[name] = index
+            self.size = index + 1
         if readonly:
             self.readonly.add(index)
         else:
@@ -152,14 +154,15 @@ class Scope(object):
 
     def __init__(self, parent, meta: ScopeInfo):
         self.parent = parent
-        self.values = [UNBOUND] * len(meta.names)
+        self.values = [UNBOUND] * meta.size
         self.meta = meta
 
 
 # A method/function call frame. `instance` and `klass` are None inside plain
 # functions, so `this` / `::` / `.static` never leak out of a method body.
-Frame = namedtuple("Frame", ["instance", "klass", "info"])
-EMPTY_FRAME = Frame(None, None, None)
+# It is a plain tuple ``(instance, klass, info)`` because one frame is built
+# for every method call and tuple literals avoid the namedtuple constructor.
+EMPTY_FRAME = (None, None, None)
 
 
 class Function(object):
@@ -306,11 +309,10 @@ class MethodTarget(object):
 
     def __call__(self, *values):
         frame = self.interp._current_frame()
-        instance = None if frame is None else frame.instance
+        instance = None if frame is None else frame[0]
         return self.info.code(
             self.interp, self.info.closure, list(values),
-            Frame(instance=instance, klass=self.info.defining_class,
-                  info=self.info))
+            (instance, self.info.defining_class, self.info))
 
     def __repr__(self):
         return f"<method target {self.info.name}>"
@@ -342,7 +344,7 @@ class FieldInfo(object):
 class KoskriptClass(object):
     __slots__ = ("name", "parent", "fields", "methods", "constructor",
                  "closure", "_fields_cache", "_methods_cache", "_mro",
-                 "_ctor_cache", "field_count")
+                 "_ctor_cache", "_init_specs", "field_count")
 
     def __init__(self, name: str, parent=None):
         self.name = name
@@ -355,6 +357,7 @@ class KoskriptClass(object):
         self._methods_cache = None
         self._mro = None
         self._ctor_cache = None
+        self._init_specs = None
         self.field_count = parent.field_count if parent is not None else 0
 
     def mro(self) -> list:
