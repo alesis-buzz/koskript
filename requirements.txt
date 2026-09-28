@@ -1,1 +1,3 @@
+# Lark powers the default parser. The experimental native parser
+# (KoskriptRuntime(native_parser_experiment=True)) needs nothing else.
 lark
