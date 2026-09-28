@@ -14,7 +14,9 @@ Or clone the repository and import it directly:
 git clone https://github.com/alesis-buzz/koskript.git
 ```
 
-Koskript has a single runtime dependency, [Lark](https://github.com/lark-parser/lark).
+Koskript requires Python 3.10+ and [Lark](https://github.com/lark-parser/lark).
+Lark powers the default parser; the experimental native parser
+(`KoskriptRuntime(native_parser_experiment=True)`) needs no dependency.
 
 ## Your first script
 

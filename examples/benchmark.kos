@@ -1,0 +1,620 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  Koskript — informe de calificaciones
+//
+//  A long form script that exercises most of the language: classes with
+//  inheritance, visibility, statics and constructors, namespaces, error types,
+//  try/catch/finally, wrappers and decorators, closures, lambdas, every loop,
+//  recursion, bytes, json and the standard library.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Configuration ──────────────────────────────────────────────────────────
+
+const SCHOOL = "Instituto Koskript"
+const PASS_MARK = 5.0
+const SUBJECTS = ["matematicas", "lengua", "fisica", "historia", "informatica"]
+const SEPARATOR = "----------------------------------------"
+
+// ── Error types ────────────────────────────────────────────────────────────
+
+error OutOfRange (err, value) {
+    err.message = "out of range: " + str(value)
+    err.value = value
+}
+
+error NotFound (err, key) {
+    err.message = "not found: " + str(key)
+    err.key = key
+}
+
+error ValidationFailed (err, field, reason) {
+    err.message = "invalid " + field + ": " + reason
+    err.field = field
+    err.reason = reason
+}
+
+// ── Wrappers and decorators ────────────────────────────────────────────────
+
+wrapper with_prefix (target) {
+    (text) { return "> " + target(text) }
+}
+
+wrapper counted (target) {
+    (name) {
+        print("  [call] " + name)
+        return target(name)
+    }
+}
+
+@with_prefix
+fn header (text) {
+    return string.upper(text)
+}
+
+@with_prefix
+@counted
+fn section (text) {
+    return string.upper(text)
+}
+
+// ── Number helpers ─────────────────────────────────────────────────────────
+
+fn is_prime (n) {
+    if (n < 2) { return false }
+    if (n < 4) { return true }
+    if (n % 2 == 0) { return false }
+    local i = 3
+    while (i * i <= n) {
+        if (n % i == 0) { return false }
+        i = i + 2
+    }
+    return true
+}
+
+fn primes_below (limit) {
+    const found = []
+    for (n in range(2, limit)) {
+        if (is_prime(n)) { array.push(found, n) }
+    }
+    return found
+}
+
+fn fib (n) {
+    if (n < 2) { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+fn factorial (n) {
+    if (n <= 1) { return 1 }
+    return n * factorial(n - 1)
+}
+
+fn gcd (a, b) {
+    // parameters are read only, so the loop keeps its own copies
+    local x = a
+    local y = b
+    while (y != 0) {
+        const t = y
+        y = x % y
+        x = t
+    }
+    return x
+}
+
+fn clamp_mark (value) {
+    if (value < 0) { return 0.0 }
+    if (value > 10) { return 10.0 }
+    return value
+}
+
+fn mean (values) {
+    if (len(values) == 0) { return 0.0 }
+    const total = array.reduce(values, (acc, v) { return acc + v }, 0.0)
+    return total / len(values)
+}
+
+fn stdev (values) {
+    const m = mean(values)
+    const squares = array.map(values, (v) { return (v - m) * (v - m) })
+    return math.sqrt(mean(squares))
+}
+
+fn highest (values) {
+    return array.reduce(values, (a, b) {
+        if (a > b) { return a }
+        return b
+    }, 0.0)
+}
+
+fn lowest (values) {
+    return array.reduce(values, (a, b) {
+        if (a < b) { return a }
+        return b
+    }, 10.0)
+}
+
+fn capitalise (name) {
+    return string.upper(string.slice(name, 0, 1)) + string.slice(name, 1)
+}
+
+// ── String helpers ─────────────────────────────────────────────────────────
+
+fn initials (name) {
+    const parts = string.split(name, " ")
+    local out = ""
+    for (part in parts) {
+        if (part != "") { out = out + string.slice(part, 0, 1) + "." }
+    }
+    return out
+}
+
+fn pad_label (text, width) {
+    if (len(text) >= width) { return text }
+    return text + string.repeat(" ", width - len(text))
+}
+
+fn normalise (text) {
+    return string.trim(string.lower(string.replace(text, "_", " ")))
+}
+
+fn join_nonempty (parts, separator) {
+    const kept = array.filter(parts, (p) { return p != "" })
+    return array.join(kept, separator)
+}
+
+fn csv_row (values) {
+    return array.join(array.map(values, str), ",")
+}
+
+// ── Validation and error handling ──────────────────────────────────────────
+
+fn validate_mark (mark) {
+    if (mark < 0 or mark > 10) { throw OutOfRange(mark) }
+    if (mark == 0) { throw ValidationFailed("mark", "a zero is not allowed") }
+    return mark
+}
+
+fn safe_mark (mark) {
+    try {
+        return validate_mark(mark)
+    } catch failure {
+        print("  ! rejected " + str(mark) + ": " + failure.message)
+        return null
+    } finally {
+        // finally always runs, even when the body throws
+    }
+}
+
+fn describe_error (fn_to_call) {
+    try {
+        return fn_to_call()
+    } catch failure {
+        return failure.name + ": " + failure.message
+    }
+}
+
+// ── Classes ────────────────────────────────────────────────────────────────
+
+class Person {
+    public name = ""
+    public age = 0
+    private secret = "hidden"
+
+    constructor (name, age) {
+        this.name = name
+        this.age = age
+        this.secret = "id-" + string.lower(name)
+    }
+
+    public fn describe () {
+        return this.name + " (" + str(this.age) + ")"
+    }
+
+    public fn older_than (age) {
+        return this.age > age
+    }
+
+    static fn of_age (people, age) {
+        const found = []
+        for (person in people) {
+            if (person.older_than(age)) { array.push(found, person) }
+        }
+        return found
+    }
+}
+
+class Student extends Person {
+    public course = ""
+    public marks = []
+
+    constructor (name, age, course) {
+        super::constructor(name, age)
+        this.course = course
+        this.marks = []
+    }
+
+    public fn add_mark (mark) {
+        const clean = clamp_mark(mark)
+        array.push(this.marks, clean)
+        return clean
+    }
+
+    public fn average_mark () {
+        return mean(this.marks)
+    }
+
+    public fn passed () {
+        if (len(this.marks) == 0) { return false }
+        return this.average_mark() >= PASS_MARK
+    }
+
+    public fn describe () {
+        return super::describe() + " [" + this.course + "]"
+    }
+
+    public fn report () {
+        local line = this.describe()
+        line = line + " media=" + str(this.average_mark())
+        line = line + " (" + str(len(this.marks)) + " notas)"
+        if (this.passed()) { return line + " APTO" }
+        return line + " NO APTO"
+    }
+}
+
+class Teacher extends Person {
+    public subject = ""
+    private students = []
+
+    constructor (name, age, subject) {
+        super::constructor(name, age)
+        this.subject = subject
+        this.students = []
+    }
+
+    public fn enrol (student) {
+        array.push(this.students, student)
+        return this
+    }
+
+    public fn average_of_class () {
+        const marks = array.map(this.students, (s) { return s.average_mark() })
+        return mean(marks)
+    }
+
+    public fn best_student () {
+        local best = null
+        for (student in this.students) {
+            if (best == null) {
+                best = student
+                continue
+            }
+            if (student.average_mark() > best.average_mark()) { best = student }
+        }
+        return best
+    }
+
+    static fn summary (teachers) {
+        local total = 0.0
+        for (teacher in teachers) { total = total + teacher.average_of_class() }
+        return total
+    }
+}
+
+class Registry {
+    private items = {}
+    private count = 0
+
+    constructor () {
+        this.items = {}
+        this.count = 0
+    }
+
+    public fn add (key, value) {
+        // note: index assignment (`this.items[key] = value`) is not part of
+        // the language yet, so the map namespace does the writing
+        map.merge(this.items, { key: value })
+        this.count = this.count + 1
+        return this
+    }
+
+    public fn get (key) {
+        if (map.has(this.items, key)) { return this.items[key] }
+        throw NotFound(key)
+    }
+
+    public fn find (key) {
+        try {
+            return this.get(key)
+        } catch failure {
+            return null
+        }
+    }
+
+    public fn size () {
+        return this.count
+    }
+
+    public fn keys () {
+        return map.keys(this.items)
+    }
+}
+
+// ── Namespaces ─────────────────────────────────────────────────────────────
+
+namespace Report {
+    const INDENT = "  "
+
+    fn line (text) {
+        return INDENT + text
+    }
+
+    fn heading (text) {
+        return string.upper(INDENT + text)
+    }
+
+    fn rule () {
+        return INDENT + string.repeat("=", 30)
+    }
+
+    fn kv (key, value) {
+        return line(pad_label(key, 14) + ": " + str(value))
+    }
+
+    namespace Math2 {
+        fn square (x) { return x * x }
+        fn cube (x) { return x * x * x }
+        fn sqrt2 (x) { return math.sqrt(x) }
+        fn hypot (a, b) { return Report.Math2.sqrt2(a * a + b * b) }
+    }
+}
+
+namespace Data {
+    const STUDENTS = {
+        "ana":   { "age": 17, "course": "4A", "marks": [9.5, 8.0, 7.25] },
+        "bruno": { "age": 16, "course": "4B", "marks": [4.0, 6.5, 5.5] },
+        "carla": { "age": 17, "course": "4A", "marks": [10.0, 9.25, 8.75] },
+        "diego": { "age": 18, "course": "4C", "marks": [3.25, 4.5, 6.0] },
+        "eva":   { "age": 16, "course": "4B", "marks": [7.0, 7.75, 8.5] }
+    }
+
+    fn names () {
+        return map.keys(Data.STUDENTS)
+    }
+
+    fn course_of (name) {
+        return Data.STUDENTS[name]["course"]
+    }
+
+    fn marks_of (name) {
+        return Data.STUDENTS[name]["marks"]
+    }
+
+    fn students_of (course) {
+        const found = []
+        foreach (name, data in Data.STUDENTS) {
+            if (data["course"] == course) { array.push(found, name) }
+        }
+        return found
+    }
+
+    fn all_marks () {
+        const marks = []
+        foreach (name, data in Data.STUDENTS) {
+            for (mark in data["marks"]) { array.push(marks, mark) }
+        }
+        return marks
+    }
+}
+
+// ── Closures ───────────────────────────────────────────────────────────────
+
+fn make_counter (start) {
+    local n = start
+    return () {
+        n = n + 1
+        return n
+    }
+}
+
+fn make_accumulator () {
+    const total = []
+    return (value) {
+        array.push(total, value)
+        return len(total)
+    }
+}
+
+// ── Workload ───────────────────────────────────────────────────────────────
+
+print(header(SCHOOL))
+print(SEPARATOR)
+print(section("datos de entrada"))
+print(Report.kv("asignaturas", len(SUBJECTS)))
+print(Report.kv("alumnos", len(Data.names())))
+print(Report.kv("cursos", array.join(Data.students_of("4A")
+                                      + Data.students_of("4B")
+                                      + Data.students_of("4C"), ", ")))
+print(Report.rule())
+
+// Build a registry of students from the data map
+const registry = new Registry()
+foreach (name, data in Data.STUDENTS) {
+    const student = new Student(capitalise(name), data["age"], data["course"])
+    for (mark in data["marks"]) { student.add_mark(mark) }
+    registry.add(name, student)
+}
+print(Report.kv("registrados", registry.size()))
+print(Report.kv("claves", array.join(array.sort(registry.keys()), ", ")))
+
+// Per student report
+print(Report.rule())
+print(Report.heading("informe por alumno"))
+const next_id = make_counter(0)
+foreach (name, data in Data.STUDENTS) {
+    const student = registry.get(name)
+    const average_mark = student.average_mark()
+    print(Report.line(student.report()))
+    print(Report.line("  #" + str(next_id()) + " " + initials(name)
+                      + " desv=" + str(stdev(student.marks))))
+    if (average_mark >= PASS_MARK) {
+        print(Report.line("  + apto"))
+    } elseif (average_mark >= PASS_MARK - 2) {
+        print(Report.line("  ~ justo"))
+    } else {
+        print(Report.line("  - suspenso"))
+    }
+}
+
+// Teachers, one per subject, each with the 4A class
+print(Report.rule())
+print(Report.heading("profesores"))
+const teachers = []
+for (subject in SUBJECTS) {
+    const teacher = new Teacher("prof. " + string.slice(subject, 0, 3), 40, subject)
+    for (name in Data.students_of("4A")) { teacher.enrol(registry.get(name)) }
+    array.push(teachers, teacher)
+    print(Report.kv(subject, teacher.average_of_class()))
+}
+print(Report.kv("promedio global", Teacher.summary(teachers)))
+
+// Maths
+print(Report.rule())
+print(Report.heading("matematicas"))
+const limit = 200
+const found_primes = primes_below(limit)
+print(Report.kv("primos < " + str(limit), array.join(array.map(found_primes, str), " ")))
+print(Report.kv("cuantos", len(found_primes)))
+print(Report.kv("fib(20)", fib(20)))
+print(Report.kv("factorial(12)", factorial(12)))
+print(Report.kv("gcd(1071, 462)", gcd(1071, 462)))
+print(Report.kv("sqrt2(2)", Report.Math2.sqrt2(2)))
+print(Report.kv("cuadrado de 7", Report.Math2.square(7)))
+print(Report.kv("cubo de 3", Report.Math2.cube(3)))
+print(Report.kv("hipot(3, 4)", Report.Math2.hypot(3, 4)))
+print(Report.kv("pi", math.round(math.pi, 4)))
+print(Report.kv("e^x(1)", math.round(math.exp(1), 4)))
+
+// Text processing
+print(Report.rule())
+print(Report.heading("cadenas"))
+const sentences = [
+    "el lenguaje  Koskript es   embeddable",
+    "Koskript se   ejecuta dentro de Python",
+    "sin dependencias, con un  parser  propio"
+]
+const words = []
+for (sentence in sentences) {
+    for (part in string.split(normalise(sentence), " ")) {
+        if (part != "") { array.push(words, part) }
+    }
+}
+print(Report.kv("palabras", len(words)))
+
+const counts = {}
+for (word in words) {
+    if (map.has(counts, word)) {
+        map.merge(counts, { word: counts[word] + 1 })
+    } else {
+        map.merge(counts, { word: 1 })
+    }
+}
+const top = array.sort_by(map.keys(counts), (key) { return -counts[key] })
+print(Report.kv("unicas", len(top)))
+print(Report.kv("frecuentes", csv_row(array.slice(top, 0, 5))))
+print(Report.kv("iniciales", join_nonempty(array.map(sentences, initials), " ")))
+print(Report.kv("primeras letras", array.join(array.map(words, (w) { return string.slice(w, 0, 1) }), "")))
+
+// Errors
+print(Report.rule())
+print(Report.heading("errores"))
+const candidates = [9.5, 12.0, -1, 0, 7.5]
+const accepted = []
+for (mark in candidates) {
+    const clean = safe_mark(mark)
+    if (clean != null) { array.push(accepted, clean) }
+}
+print(Report.kv("aceptadas", array.join(array.map(accepted, str), " ")))
+print(Report.kv("descartadas", len(candidates) - len(accepted)))
+print(Report.kv("missing es null", registry.find("nobody") == null))
+print(Report.kv("error capturado", describe_error(() { registry.get("nada") })))
+print(Report.kv("error validado", describe_error(() { validate_mark(0) })))
+print(Report.kv("sin error", describe_error(() { return 42 })))
+
+// Nested loops with break and continue
+print(Report.rule())
+print(Report.heading("bucles anidados"))
+local total = 0
+for (i in range(1, 15)) {
+    if (i % 2 == 0) { continue }
+    for (j in range(1, 15)) {
+        if (i * j > 60) { break }
+        if (i == j) { continue }
+        total = total + i * j
+    }
+}
+print(Report.kv("total", total))
+
+local countdown = 10
+while (countdown > 0) {
+    countdown = countdown - 1
+    if (countdown == 4) { continue }
+    if (countdown < 2) { break }
+}
+print(Report.kv("countdown", countdown))
+
+// Bytes and json
+print(Report.rule())
+print(Report.heading("bytes y json"))
+const payload = b"\x01\x02\x03koskript"
+print(Report.kv("len", len(payload)))
+print(Report.kv("hex", bytes.hex(payload)))
+print(Report.kv("primer byte", payload[0]))
+print(Report.kv("texto", bytes.to_string(bytes.slice(payload, 3, 10))))
+print(Report.kv("json", json.encode({ "alumnos": len(Data.names()), "apto": true })))
+const decoded = json.decode("{\"apto\": true, \"nota\": 9.5}")
+print(Report.kv("decodificado", decoded["nota"]))
+
+// Global statistics
+print(Report.rule())
+print(Report.heading("estadisticas globales"))
+const all_marks = Data.all_marks()
+const sorted_marks = array.sort(all_marks)
+print(Report.kv("total notas", len(all_marks)))
+print(Report.kv("media", mean(all_marks)))
+print(Report.kv("mediana", sorted_marks[math.floor(len(sorted_marks) / 2)]))
+print(Report.kv("desviacion", stdev(all_marks)))
+print(Report.kv("maximo", highest(all_marks)))
+print(Report.kv("minimo", lowest(all_marks)))
+print(Report.kv("aprobadas", len(array.filter(all_marks, (m) { return m >= PASS_MARK }))))
+print(Report.kv("suspendidas", len(array.filter(all_marks, (m) { return m < PASS_MARK }))))
+print(Report.kv("suma", array.reduce(all_marks, (a, b) { return a + b }, 0.0)))
+
+// Polymorphism through a mixed list
+print(Report.rule())
+print(Report.heading("polimorfismo"))
+const people = [
+    new Person("Ada", 36),
+    new Student("Linus", 17, "4A"),
+    new Teacher("Grace", 45, "informatica")
+]
+for (person in people) { print(Report.line(person.describe())) }
+print(Report.kv("mayores de 17", len(Person.of_age(people, 17))))
+print(Report.kv("mejor alumno", teachers[0].best_student().name))
+
+// A heavier loop, so the run time is worth measuring
+print(Report.rule())
+print(Report.heading("carga"))
+const counter = make_accumulator()
+local checksum = 0
+local rounds = 0
+for (round in range(200)) {
+    const student = registry.get(Data.names()[round % 5])
+    for (mark in student.marks) {
+        checksum = checksum + round + mark
+    }
+    rounds = counter(checksum)
+}
+print(Report.kv("iteraciones", rounds))
+print(Report.kv("checksum", checksum))
+
+print(SEPARATOR)
+print("fin del informe")

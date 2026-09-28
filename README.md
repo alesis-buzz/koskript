@@ -60,6 +60,8 @@ git clone https://github.com/alesis-buzz/koskript.git
 ```
 
 Koskript requires Python 3.10+ and [Lark](https://github.com/lark-parser/lark).
+There is an experimental dependency-free parser behind
+`KoskriptRuntime(native_parser_experiment=True)`.
 
 ---
 

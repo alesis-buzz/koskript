@@ -28,10 +28,8 @@ class KoskriptInterpreter(object):
     def execute(self, ast: list):
         if type(ast) is not list:
             ast = [ast]
-        chunk = self.compiler.compile_chunk(ast)
-        self._sync_scope(self.root)
         try:
-            return chunk(self.root)
+            return self.run_chunk(self.compiler.compile_chunk(ast))
         except ThrownSignal as signal:
             raise self._uncaught(signal) from None
 
@@ -52,12 +50,15 @@ class KoskriptInterpreter(object):
         """Compile and run ``ast`` in its own root scope (used by modules)."""
         if type(ast) is not list:
             ast = [ast]
-        chunk = self.compiler.compile_chunk(ast, scope_info, base_dir)
+        return self.run_chunk(
+            self.compiler.compile_chunk(ast, scope_info, base_dir), scope)
+
+    def run_chunk(self, chunk, scope: Scope = None):
+        """Run an already compiled chunk, so a source is only compiled once."""
+        scope = self.root if scope is None else scope
         self._sync_scope(scope)
         try:
             return chunk(scope)
-        except ReturnSignal as signal:
-            return signal.value
         except (BreakSignal, ContinueSignal) as signal:
             raise Errors.RuntimeError(f"'{signal}' outside of a loop")
 
