@@ -1,14 +1,14 @@
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
-  else root.docmd = factory();
+  else root.docroute = factory();
 })(typeof globalThis !== "undefined" ? globalThis : typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
   var VERSION = "1.0.0";
   var MARKED_URL = "https://cdn.jsdelivr.net/npm/marked@12/marked.min.js";
   var HIGHLIGHT_URL = "https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js";
-  var THEME_KEY = "docmd-theme";
-  var FALLBACK_CSS = `.docmd {
+  var THEME_KEY = "docroute-theme";
+  var FALLBACK_CSS = `.docroute {
   --d-radius: 12px;
   --d-bg: #0a0a0b;
   --d-panel: #101013;
@@ -35,7 +35,7 @@
   -webkit-font-smoothing: antialiased;
 }
 
-.docmd[data-docmd-theme="light"] {
+.docroute[data-docroute-theme="light"] {
   --d-bg: #ffffff;
   --d-panel: #fafafa;
   --d-panel-2: #f2f2f3;
@@ -51,31 +51,31 @@
   --d-code-tag: #a03a48;
 }
 
-.docmd *,
-.docmd *::before,
-.docmd *::after {
+.docroute *,
+.docroute *::before,
+.docroute *::after {
   box-sizing: border-box;
 }
 
-.docmd ::selection {
+.docroute ::selection {
   background: var(--d-primary-soft);
   color: var(--d-text);
 }
 
-.docmd a {
+.docroute a {
   color: inherit;
   text-decoration: none;
 }
 
-.docmd button {
+.docroute button {
   font: inherit;
 }
 
-.docmd [hidden] {
+.docroute [hidden] {
   display: none !important;
 }
 
-.docmd-sidebar {
+.docroute-sidebar {
   position: sticky;
   top: 0;
   z-index: 20;
@@ -88,17 +88,17 @@
   border-right: 1px solid var(--d-border);
 }
 
-.docmd-sidebar::-webkit-scrollbar {
+.docroute-sidebar::-webkit-scrollbar {
   width: 10px;
 }
 
-.docmd-sidebar::-webkit-scrollbar-thumb {
+.docroute-sidebar::-webkit-scrollbar-thumb {
   background: var(--d-border);
   border: 3px solid var(--d-panel);
   border-radius: 999px;
 }
 
-.docmd-brand {
+.docroute-brand {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -109,7 +109,7 @@
   cursor: pointer;
 }
 
-.docmd-brand-mark {
+.docroute-brand-mark {
   display: grid;
   place-items: center;
   width: 22px;
@@ -121,17 +121,25 @@
   font-weight: 700;
 }
 
-.docmd-brand-name {
+.docroute-brand-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.docroute-brand-name {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.docmd-search {
+.docroute-search {
   padding: 2px 10px 10px;
 }
 
-.docmd-search-input {
+.docroute-search-input {
   width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--d-border);
@@ -142,31 +150,31 @@
   font-size: 13.5px;
 }
 
-.docmd-search-input::placeholder {
+.docroute-search-input::placeholder {
   color: var(--d-muted);
 }
 
-.docmd-search-input:focus {
+.docroute-search-input:focus {
   border-color: var(--d-primary);
   box-shadow: 0 0 0 3px var(--d-primary-soft);
   outline: none;
 }
 
-.docmd-search-empty {
+.docroute-search-empty {
   padding: 8px 20px;
   color: var(--d-muted);
   font-size: 13px;
 }
 
-.docmd-nav {
+.docroute-nav {
   padding: 6px 10px 28px;
 }
 
-.docmd-section + .docmd-section {
+.docroute-section + .docroute-section {
   margin-top: 20px;
 }
 
-.docmd-section-title {
+.docroute-section-title {
   padding: 6px 10px;
   color: var(--d-muted);
   font-size: 11.5px;
@@ -175,7 +183,7 @@
   text-transform: uppercase;
 }
 
-.docmd-item {
+.docroute-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -187,30 +195,30 @@
   line-height: 1.45;
 }
 
-.docmd-item > span:first-child {
+.docroute-item > span:first-child {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.docmd-item:hover {
+.docroute-item:hover {
   background: var(--d-panel-2);
   color: var(--d-text);
 }
 
-.docmd-item.is-active {
+.docroute-item.is-active {
   background: var(--d-primary-soft);
   color: var(--d-text);
   font-weight: 500;
 }
 
-.docmd-external-glyph {
+.docroute-external-glyph {
   margin-left: auto;
   font-size: 12px;
   opacity: 0.65;
 }
 
-.docmd-sidebar-footer {
+.docroute-sidebar-footer {
   margin-top: auto;
   padding: 14px 20px 16px;
   border-top: 1px solid var(--d-border);
@@ -218,26 +226,26 @@
   font-size: 12px;
 }
 
-.docmd-sidebar-footer a {
+.docroute-sidebar-footer a {
   color: var(--d-muted);
 }
 
-.docmd-sidebar-footer a:hover {
+.docroute-sidebar-footer a:hover {
   color: var(--d-text);
 }
 
-.docmd-overlay {
+.docroute-overlay {
   display: none;
 }
 
-.docmd-main {
+.docroute-main {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
 }
 
-.docmd-topbar {
+.docroute-topbar {
   position: sticky;
   top: 0;
   z-index: 10;
@@ -253,7 +261,7 @@
   -webkit-backdrop-filter: blur(12px);
 }
 
-.docmd-crumbs {
+.docroute-crumbs {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -262,11 +270,11 @@
   font-size: 13px;
 }
 
-.docmd-crumb-sep {
+.docroute-crumb-sep {
   opacity: 0.5;
 }
 
-.docmd-crumb-current {
+.docroute-crumb-current {
   overflow: hidden;
   color: var(--d-text);
   font-weight: 500;
@@ -274,13 +282,13 @@
   text-overflow: ellipsis;
 }
 
-.docmd-actions {
+.docroute-actions {
   display: flex;
   gap: 8px;
   margin-left: auto;
 }
 
-.docmd-icon-btn {
+.docroute-icon-btn {
   display: grid;
   place-items: center;
   width: 34px;
@@ -293,15 +301,15 @@
   cursor: pointer;
 }
 
-.docmd-icon-btn:hover {
+.docroute-icon-btn:hover {
   background: var(--d-panel-2);
 }
 
-.docmd-menu-btn {
+.docroute-menu-btn {
   display: none;
 }
 
-.docmd-content {
+.docroute-content {
   flex: 1 0 auto;
   width: 100%;
   max-width: 860px;
@@ -309,86 +317,86 @@
   padding: 40px 28px 96px;
 }
 
-.docmd-content > *:first-child {
+.docroute-content > *:first-child {
   margin-top: 0;
 }
 
-.docmd-content h1,
-.docmd-content h2,
-.docmd-content h3,
-.docmd-content h4,
-.docmd-content h5,
-.docmd-content h6 {
+.docroute-content h1,
+.docroute-content h2,
+.docroute-content h3,
+.docroute-content h4,
+.docroute-content h5,
+.docroute-content h6 {
   margin: 36px 0 12px;
   line-height: 1.25;
   letter-spacing: -0.02em;
 }
 
-.docmd-content h1 {
+.docroute-content h1 {
   margin-top: 0;
   font-size: 2rem;
 }
 
-.docmd-content h2 {
+.docroute-content h2 {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--d-border);
   font-size: 1.35rem;
 }
 
-.docmd-content h3 {
+.docroute-content h3 {
   font-size: 1.12rem;
 }
 
-.docmd-content h4 {
+.docroute-content h4 {
   font-size: 1rem;
 }
 
-.docmd-content p,
-.docmd-content ul,
-.docmd-content ol,
-.docmd-content .docmd-table-wrap,
-.docmd-content pre,
-.docmd-content blockquote,
-.docmd-content details {
+.docroute-content p,
+.docroute-content ul,
+.docroute-content ol,
+.docroute-content .docroute-table-wrap,
+.docroute-content pre,
+.docroute-content blockquote,
+.docroute-content details {
   margin: 0 0 16px;
 }
 
-.docmd-content ul,
-.docmd-content ol {
+.docroute-content ul,
+.docroute-content ol {
   padding-left: 24px;
 }
 
-.docmd-content li + li {
+.docroute-content li + li {
   margin-top: 4px;
 }
 
-.docmd-content li:has(> input[type="checkbox"]) {
+.docroute-content li:has(> input[type="checkbox"]) {
   list-style: none;
   margin-left: -1.4em;
 }
 
-.docmd-content input[type="checkbox"] {
+.docroute-content input[type="checkbox"] {
   margin-right: 8px;
   vertical-align: middle;
 }
 
-.docmd-content a {
+.docroute-content a {
   color: var(--d-primary);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
 
-.docmd-content a:hover {
+.docroute-content a:hover {
   text-decoration-thickness: 2px;
 }
 
-.docmd-content strong {
+.docroute-content strong {
   color: var(--d-text);
   font-weight: 600;
 }
 
-.docmd-content code {
+.docroute-content code {
   padding: 2px 6px;
   border: 1px solid var(--d-border);
   border-radius: 7px;
@@ -397,7 +405,7 @@
   font-size: 0.85em;
 }
 
-.docmd-content pre {
+.docroute-content pre {
   overflow: auto;
   padding: 14px 16px;
   border: 1px solid var(--d-border);
@@ -405,7 +413,7 @@
   background: var(--d-panel);
 }
 
-.docmd-content pre code {
+.docroute-content pre code {
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -414,16 +422,16 @@
   line-height: 1.6;
 }
 
-.docmd-code {
+.docroute-code {
   position: relative;
   margin: 0 0 16px;
 }
 
-.docmd-code pre {
+.docroute-code pre {
   margin: 0;
 }
 
-.docmd-copy-btn {
+.docroute-copy-btn {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -438,140 +446,190 @@
   cursor: pointer;
 }
 
-.docmd-copy-btn:hover {
+.docroute-copy-btn:hover {
   border-color: var(--d-primary);
   color: var(--d-text);
 }
 
-.docmd-copy-btn.is-copied {
+.docroute-copy-btn.is-copied {
   border-color: var(--d-primary);
   color: var(--d-primary);
 }
 
-.docmd-content .hljs-comment,
-.docmd-content .hljs-quote {
+.docroute-content .hljs-comment,
+.docroute-content .hljs-quote {
   color: var(--d-muted);
   font-style: italic;
 }
 
-.docmd-content .hljs-keyword,
-.docmd-content .hljs-selector-tag,
-.docmd-content .hljs-literal,
-.docmd-content .hljs-section,
-.docmd-content .hljs-doctag,
-.docmd-content .hljs-operator {
+.docroute-content .hljs-keyword,
+.docroute-content .hljs-selector-tag,
+.docroute-content .hljs-literal,
+.docroute-content .hljs-section,
+.docroute-content .hljs-doctag,
+.docroute-content .hljs-operator {
   color: var(--d-primary);
 }
 
-.docmd-content .hljs-string,
-.docmd-content .hljs-regexp,
-.docmd-content .hljs-char.escape_,
-.docmd-content .hljs-subst,
-.docmd-content .hljs-symbol,
-.docmd-content .hljs-bullet,
-.docmd-content .hljs-addition {
+.docroute-content .hljs-string,
+.docroute-content .hljs-regexp,
+.docroute-content .hljs-char.escape_,
+.docroute-content .hljs-subst,
+.docroute-content .hljs-symbol,
+.docroute-content .hljs-bullet,
+.docroute-content .hljs-addition {
   color: var(--d-code-string);
 }
 
-.docmd-content .hljs-number,
-.docmd-content .hljs-variable,
-.docmd-content .hljs-template-variable,
-.docmd-content .hljs-attr,
-.docmd-content .hljs-attribute,
-.docmd-content .hljs-selector-attr,
-.docmd-content .hljs-selector-pseudo,
-.docmd-content .hljs-property {
+.docroute-content .hljs-number,
+.docroute-content .hljs-variable,
+.docroute-content .hljs-template-variable,
+.docroute-content .hljs-attr,
+.docroute-content .hljs-attribute,
+.docroute-content .hljs-selector-attr,
+.docroute-content .hljs-selector-pseudo,
+.docroute-content .hljs-property {
   color: var(--d-code-number);
 }
 
-.docmd-content .hljs-title,
-.docmd-content .hljs-built_in,
-.docmd-content .hljs-type,
-.docmd-content .hljs-class .hljs-title,
-.docmd-content .hljs-function .hljs-title {
+.docroute-content .hljs-title,
+.docroute-content .hljs-built_in,
+.docroute-content .hljs-type,
+.docroute-content .hljs-class .hljs-title,
+.docroute-content .hljs-function .hljs-title {
   color: var(--d-code-function);
 }
 
-.docmd-content .hljs-tag,
-.docmd-content .hljs-name,
-.docmd-content .hljs-selector-id,
-.docmd-content .hljs-selector-class,
-.docmd-content .hljs-template-tag,
-.docmd-content .hljs-deletion,
-.docmd-content .hljs-meta {
+.docroute-content .hljs-tag,
+.docroute-content .hljs-name,
+.docroute-content .hljs-selector-id,
+.docroute-content .hljs-selector-class,
+.docroute-content .hljs-template-tag,
+.docroute-content .hljs-deletion,
+.docroute-content .hljs-meta {
   color: var(--d-code-tag);
 }
 
-.docmd-content .hljs-emphasis {
+.docroute-content .hljs-emphasis {
   font-style: italic;
 }
 
-.docmd-content .hljs-strong {
+.docroute-content .hljs-strong {
   font-weight: 600;
 }
 
-.docmd-content .hljs-link {
+.docroute-content .hljs-link {
   text-decoration: underline;
 }
 
-.docmd-content blockquote {
+.docroute-content blockquote {
   margin-left: 0;
   padding: 2px 0 2px 16px;
   border-left: 2px solid var(--d-primary);
   color: var(--d-muted);
 }
 
-.docmd-content blockquote > *:last-child {
+.docroute-content blockquote > *:last-child {
   margin-bottom: 0;
 }
 
-.docmd-content hr {
+.docroute-callout {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--d-border);
+  border-left: 3px solid var(--d-primary);
+  border-radius: var(--d-radius);
+  background: var(--d-panel);
+}
+
+.docroute-callout-title {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.docroute-callout-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.docroute-callout.is-note {
+  border-left-color: #8ab4f8;
+  background: rgba(138, 180, 248, 0.08);
+  background: color-mix(in srgb, #8ab4f8 10%, var(--d-panel));
+}
+
+.docroute-callout.is-tip {
+  border-left-color: #9ecb8f;
+  background: rgba(158, 203, 143, 0.08);
+  background: color-mix(in srgb, #9ecb8f 10%, var(--d-panel));
+}
+
+.docroute-callout.is-important {
+  border-left-color: #c792ea;
+  background: rgba(199, 146, 234, 0.09);
+  background: color-mix(in srgb, #c792ea 11%, var(--d-panel));
+}
+
+.docroute-callout.is-warning {
+  border-left-color: #e0a878;
+  background: rgba(224, 168, 120, 0.09);
+  background: color-mix(in srgb, #e0a878 11%, var(--d-panel));
+}
+
+.docroute-callout.is-caution {
+  border-left-color: #e39aa6;
+  background: rgba(227, 154, 166, 0.09);
+  background: color-mix(in srgb, #e39aa6 11%, var(--d-panel));
+}
+
+.docroute-content hr {
   margin: 32px 0;
   border: 0;
   border-top: 1px solid var(--d-border);
 }
 
-.docmd-content img {
+.docroute-content img {
   max-width: 100%;
   border-radius: var(--d-radius);
 }
 
-.docmd-table-wrap {
+.docroute-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--d-border);
   border-radius: var(--d-radius);
 }
 
-.docmd-content table {
+.docroute-content table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 14px;
 }
 
-.docmd-content th,
-.docmd-content td {
+.docroute-content th,
+.docroute-content td {
   padding: 9px 14px;
   border-bottom: 1px solid var(--d-border);
   border-left: 1px solid var(--d-border);
   text-align: left;
 }
 
-.docmd-content th:first-child,
-.docmd-content td:first-child {
+.docroute-content th:first-child,
+.docroute-content td:first-child {
   border-left: 0;
 }
 
-.docmd-content tr:last-child td {
+.docroute-content tr:last-child td {
   border-bottom: 0;
 }
 
-.docmd-content th {
+.docroute-content th {
   background: var(--d-panel-2);
   font-weight: 600;
 }
 
-.docmd-pager {
+.docroute-pager {
   display: flex;
   gap: 12px;
   margin-top: 56px;
@@ -579,7 +637,7 @@
   border-top: 1px solid var(--d-border);
 }
 
-.docmd-pager-link {
+.docroute-pager-link {
   flex: 1 1 0;
   min-width: 0;
   padding: 12px 16px;
@@ -588,15 +646,15 @@
   background: var(--d-panel);
 }
 
-.docmd-pager-link:hover {
+.docroute-pager-link:hover {
   border-color: var(--d-primary);
 }
 
-.docmd-pager-link.is-next {
+.docroute-pager-link.is-next {
   text-align: right;
 }
 
-.docmd-pager-label {
+.docroute-pager-label {
   display: block;
   margin-bottom: 2px;
   color: var(--d-muted);
@@ -606,7 +664,7 @@
   text-transform: uppercase;
 }
 
-.docmd-pager-name {
+.docroute-pager-name {
   display: block;
   overflow: hidden;
   color: var(--d-text);
@@ -615,24 +673,24 @@
   text-overflow: ellipsis;
 }
 
-.docmd-state {
+.docroute-state {
   padding: 56px 0;
   color: var(--d-muted);
   font-size: 14px;
 }
 
-.docmd-state strong {
+.docroute-state strong {
   display: block;
   margin-bottom: 6px;
   color: var(--d-text);
   font-size: 15px;
 }
 
-.docmd-state p {
+.docroute-state p {
   margin: 0 0 8px;
 }
 
-.docmd-state code {
+.docroute-state code {
   padding: 2px 6px;
   border: 1px solid var(--d-border);
   border-radius: 7px;
@@ -641,65 +699,65 @@
   font-size: 12.5px;
 }
 
-.docmd-skeleton {
+.docroute-skeleton {
   padding-top: 4px;
 }
 
-.docmd-skeleton-line,
-.docmd-skeleton-block {
+.docroute-skeleton-line,
+.docroute-skeleton-block {
   background: var(--d-panel);
   background: linear-gradient(90deg, var(--d-panel) 25%, var(--d-panel-2) 50%, var(--d-panel) 75%);
   background-size: 200% 100%;
   border-radius: var(--d-radius);
-  animation: docmd-shimmer 1.4s linear infinite;
+  animation: docroute-shimmer 1.4s linear infinite;
 }
 
-.docmd-skeleton-line {
+.docroute-skeleton-line {
   height: 12px;
   margin-bottom: 14px;
 }
 
-.docmd-skeleton-title {
+.docroute-skeleton-title {
   width: 42%;
   height: 26px;
   margin-bottom: 30px;
 }
 
-.docmd-skeleton-line:nth-of-type(2) {
+.docroute-skeleton-line:nth-of-type(2) {
   width: 96%;
 }
 
-.docmd-skeleton-line:nth-of-type(3) {
+.docroute-skeleton-line:nth-of-type(3) {
   width: 88%;
 }
 
-.docmd-skeleton-line:nth-of-type(4) {
+.docroute-skeleton-line:nth-of-type(4) {
   width: 94%;
 }
 
-.docmd-skeleton-line:nth-of-type(5) {
+.docroute-skeleton-line:nth-of-type(5) {
   width: 64%;
 }
 
-.docmd-skeleton-block {
+.docroute-skeleton-block {
   height: 128px;
   margin: 26px 0;
 }
 
-.docmd-skeleton-line:nth-of-type(7) {
+.docroute-skeleton-line:nth-of-type(7) {
   width: 90%;
 }
 
-.docmd-skeleton-line:nth-of-type(8) {
+.docroute-skeleton-line:nth-of-type(8) {
   width: 97%;
 }
 
-.docmd-skeleton-line:nth-of-type(9) {
+.docroute-skeleton-line:nth-of-type(9) {
   width: 70%;
   margin-bottom: 0;
 }
 
-@keyframes docmd-shimmer {
+@keyframes docroute-shimmer {
   from {
     background-position: 200% 0;
   }
@@ -710,14 +768,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .docmd-skeleton-line,
-  .docmd-skeleton-block {
+  .docroute-skeleton-line,
+  .docroute-skeleton-block {
     animation: none;
   }
 }
 
 @media (max-width: 900px) {
-  .docmd-sidebar {
+  .docroute-sidebar {
     position: fixed;
     left: 0;
     top: 0;
@@ -726,11 +784,11 @@
     transition: transform 0.18s ease;
   }
 
-  .docmd.is-open .docmd-sidebar {
+  .docroute.is-open .docroute-sidebar {
     transform: none;
   }
 
-  .docmd-overlay {
+  .docroute-overlay {
     position: fixed;
     inset: 0;
     z-index: 15;
@@ -738,19 +796,19 @@
     background: rgba(0, 0, 0, 0.5);
   }
 
-  .docmd.is-open .docmd-overlay {
+  .docroute.is-open .docroute-overlay {
     display: block;
   }
 
-  .docmd-menu-btn {
+  .docroute-menu-btn {
     display: grid;
   }
 
-  .docmd-content {
+  .docroute-content {
     padding: 28px 18px 72px;
   }
 
-  .docmd-content h1 {
+  .docroute-content h1 {
     font-size: 1.7rem;
   }
 }
@@ -766,7 +824,12 @@
     theme: "dark",
     search: null,
     searchEmpty: null,
-    token: 0
+    token: 0,
+    options: {},
+    contentIndex: {},
+    indexPromise: null,
+    indexReady: false,
+    shortcutBound: false
   };
 
   var markedPromise = null;
@@ -808,6 +871,20 @@
     return /^[a-z][a-z0-9+.-]*:/i.test(String(url));
   }
 
+  function normalizeFooter(footer, footerUrl) {
+    if (footer === false) return false;
+    if (footer && typeof footer === "object") {
+      var text = footer.text || footer.label || "Powered by docroute";
+      var url = footer.url || footer.href || footerUrl || null;
+      return { text: String(text), url: url ? String(url) : null };
+    }
+    if (typeof footer === "string") {
+      if (!footer) return false;
+      return { text: footer, url: footerUrl ? String(footerUrl) : null };
+    }
+    return { text: "Powered by docroute", url: "https://github.com/alesis-buzz/docroute" };
+  }
+
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       var script = document.createElement("script");
@@ -822,14 +899,14 @@
   }
 
   function ensureStyles() {
-    if (document.getElementById("docmd-styles")) return;
+    if (document.getElementById("docroute-styles")) return;
     var links = document.querySelectorAll('link[rel="stylesheet"]');
     for (var i = 0; i < links.length; i++) {
       var href = links[i].getAttribute("href") || "";
-      if (/(^|\/)docmd(\.min)?\.css(\?|#|$)/.test(href)) return;
+      if (/(^|\/)docroute(\.min)?\.css(\?|#|$)/.test(href)) return;
     }
     var style = document.createElement("style");
-    style.id = "docmd-styles";
+    style.id = "docroute-styles";
     style.textContent = FALLBACK_CSS;
     document.head.appendChild(style);
   }
@@ -848,7 +925,7 @@
         })
         .catch(function () {
           markedPromise = null;
-          throw new Error("DocMD could not load the Markdown parser from " + MARKED_URL);
+          throw new Error("DocRoute could not load the Markdown parser from " + MARKED_URL);
         });
     }
     return markedPromise;
@@ -925,9 +1002,9 @@
     for (var i = 0; i < tables.length; i++) {
       var table = tables[i];
       var parent = table.parentNode;
-      if (parent && parent.classList && parent.classList.contains("docmd-table-wrap")) continue;
+      if (parent && parent.classList && parent.classList.contains("docroute-table-wrap")) continue;
       var wrapper = document.createElement("div");
-      wrapper.className = "docmd-table-wrap";
+      wrapper.className = "docroute-table-wrap";
       parent.insertBefore(wrapper, table);
       wrapper.appendChild(table);
     }
@@ -970,14 +1047,14 @@
     for (var i = 0; i < blocks.length; i++) {
       var pre = blocks[i];
       var parent = pre.parentNode;
-      if (parent && parent.classList && parent.classList.contains("docmd-code")) continue;
+      if (parent && parent.classList && parent.classList.contains("docroute-code")) continue;
       var wrapper = document.createElement("div");
-      wrapper.className = "docmd-code";
+      wrapper.className = "docroute-code";
       parent.insertBefore(wrapper, pre);
       wrapper.appendChild(pre);
       var button = document.createElement("button");
       button.type = "button";
-      button.className = "docmd-copy-btn";
+      button.className = "docroute-copy-btn";
       button.textContent = "Copy";
       button.setAttribute("aria-label", "Copy code");
       wrapper.appendChild(button);
@@ -985,9 +1062,9 @@
   }
 
   function copyClick(event) {
-    var button = event.target.closest ? event.target.closest(".docmd-copy-btn") : null;
+    var button = event.target.closest ? event.target.closest(".docroute-copy-btn") : null;
     if (!button) return;
-    var wrapper = button.closest(".docmd-code");
+    var wrapper = button.closest(".docroute-code");
     var code = wrapper ? wrapper.querySelector("pre code") : null;
     if (!code) return;
     copyText(code.textContent).then(function (copied) {
@@ -998,6 +1075,143 @@
         button.classList.remove("is-copied");
       }, 1600);
     });
+  }
+
+  var CALLOUT_TITLES = {
+    note: "Note",
+    tip: "Tip",
+    important: "Important",
+    warning: "Warning",
+    caution: "Caution"
+  };
+
+  function decorateCallouts(container) {
+    var quotes = container.querySelectorAll("blockquote");
+    for (var i = 0; i < quotes.length; i++) {
+      var quote = quotes[i];
+      var first = quote.querySelector("p");
+      if (!first) continue;
+      var text = first.textContent || "";
+      var match = /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i.exec(text);
+      if (!match) continue;
+      var type = match[1].toLowerCase();
+      var marker = match[0];
+      if (first.firstChild && first.firstChild.nodeType === 3) {
+        first.firstChild.nodeValue = first.firstChild.nodeValue.replace(marker, "");
+      } else {
+        first.textContent = text.replace(marker, "");
+      }
+      if (!first.textContent.trim() && first.parentNode === quote) {
+        var next = first.nextSibling;
+        first.parentNode.removeChild(first);
+        if (!quote.children.length && next) quote.appendChild(next);
+      }
+      var callout = document.createElement("div");
+      callout.className = "docroute-callout is-" + type;
+      var title = document.createElement("div");
+      title.className = "docroute-callout-title";
+      title.textContent = CALLOUT_TITLES[type] || type;
+      var body = document.createElement("div");
+      body.className = "docroute-callout-body";
+      while (quote.firstChild) body.appendChild(quote.firstChild);
+      callout.appendChild(title);
+      callout.appendChild(body);
+      quote.parentNode.replaceChild(callout, quote);
+    }
+  }
+
+  function applyFavicon(url) {
+    if (!url) return;
+    var link = document.querySelector('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.href = url;
+  }
+
+  function searchContentEnabled() {
+    return state.options.searchContent !== false;
+  }
+
+  function ensureContentIndex() {
+    if (state.indexReady) return Promise.resolve(state.contentIndex);
+    if (state.indexPromise) return state.indexPromise;
+    if (!state.config || !state.config.pages.length) {
+      state.indexReady = true;
+      return Promise.resolve(state.contentIndex);
+    }
+    state.indexPromise = Promise.all(
+      state.config.pages.map(function (page) {
+        if (state.contentIndex[page.slug]) return Promise.resolve(null);
+        return fetchText(page.url)
+          .then(function (markdown) {
+            state.contentIndex[page.slug] = normalizeText(markdown);
+          })
+          .catch(function () {
+            state.contentIndex[page.slug] = "";
+          });
+      })
+    ).then(function () {
+      state.indexReady = true;
+      return state.contentIndex;
+    });
+    return state.indexPromise;
+  }
+
+  function scheduleContentIndex() {
+    if (!searchContentEnabled()) return;
+    var kick = function () {
+      ensureContentIndex().then(function () {
+        if (state.search && state.search.value) filterNav();
+      });
+    };
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(kick);
+    else setTimeout(kick, 1500);
+  }
+
+  function isTypingTarget(element) {
+    if (!element) return false;
+    var tag = (element.tagName || "").toUpperCase();
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || !!element.isContentEditable;
+  }
+
+  function shortcutsEnabled() {
+    return state.options.shortcuts !== false;
+  }
+
+  function onShortcutKey(event) {
+    if (!shortcutsEnabled() || !state.config) return;
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+    var active = document.activeElement;
+    if (event.key === "/" && !isTypingTarget(active)) {
+      if (state.search) {
+        event.preventDefault();
+        state.search.focus();
+      }
+      return;
+    }
+    if (event.key === "Escape" && active === state.search) {
+      state.search.value = "";
+      filterNav();
+      state.search.blur();
+      return;
+    }
+    if ((event.key === "ArrowRight" || event.key === "ArrowLeft") && !isTypingTarget(active)) {
+      if (!state.current) return;
+      var target = state.config.pages[state.current.index + (event.key === "ArrowRight" ? 1 : -1)];
+      if (target) {
+        event.preventDefault();
+        go(target.slug);
+      }
+    }
+  }
+
+  function bindShortcuts() {
+    if (state.shortcutBound) return;
+    state.shortcutBound = true;
+    document.addEventListener("keydown", onShortcutKey);
   }
 
   function loadConfig(input) {
@@ -1034,14 +1248,24 @@
       meta.name = raw.name || raw.title || "Documentation";
       meta.primary = raw.primary || raw.primaryColor || raw.primary_color || null;
       meta.theme = raw.theme === "light" ? "light" : null;
+      meta.logo = raw.logo || raw.logoUrl || raw.logo_url || null;
+      meta.favicon = raw.favicon || raw.icon || null;
+      meta.footer = raw.footer !== undefined ? raw.footer : raw.footerText !== undefined ? raw.footerText : raw.footer_text !== undefined ? raw.footer_text : undefined;
+      meta.footerUrl = raw.footerUrl || raw.footer_url || null;
       items = Array.isArray(raw.sections) ? raw.sections : Array.isArray(raw.items) ? raw.items : [];
       if (raw.base_url || raw.baseUrl) {
         var base = String(raw.base_url || raw.baseUrl);
         if (base.charAt(base.length - 1) !== "/") base += "/";
         baseUrl = resolveUrl(baseUrl, base);
       }
+      if (meta.logo && !isAbsoluteUrl(meta.logo)) meta.logo = resolveUrl(baseUrl, meta.logo);
+      if (meta.favicon && !isAbsoluteUrl(meta.favicon)) meta.favicon = resolveUrl(baseUrl, meta.favicon);
+      if (typeof meta.footerUrl === "string" && meta.footerUrl && !isAbsoluteUrl(meta.footerUrl)) {
+        meta.footerUrl = resolveUrl(baseUrl, meta.footerUrl);
+      }
     }
     if (!meta.name) meta.name = "Documentation";
+    if (meta.footer === undefined) meta.footer = undefined;
 
     var pages = [];
     var links = [];
@@ -1106,6 +1330,9 @@
       name: meta.name,
       primary: meta.primary,
       theme: meta.theme,
+      logo: meta.logo || null,
+      favicon: meta.favicon || null,
+      footer: normalizeFooter(meta.footer, meta.footerUrl),
       sections: sections,
       pages: pages,
       links: links,
@@ -1119,54 +1346,80 @@
       var target = typeof options.target === "string" ? document.querySelector(options.target) : options.target;
       if (target) return target;
     }
-    return document.getElementById("docmd") || document.body;
+    return document.getElementById("docroute") || document.body;
   }
 
   function buildShell(root, config, theme) {
-    root.classList.add("docmd");
-    root.setAttribute("data-docmd-theme", theme);
+    root.classList.add("docroute");
+    root.setAttribute("data-docroute-theme", theme);
     root.innerHTML =
-      '<aside class="docmd-sidebar">' +
-      '<div class="docmd-brand"><span class="docmd-brand-mark">M</span><span class="docmd-brand-name"></span></div>' +
-      '<div class="docmd-search"><input type="search" class="docmd-search-input" placeholder="Search…" aria-label="Search pages"></div>' +
-      '<nav class="docmd-nav"></nav>' +
-      '<div class="docmd-search-empty" hidden>No results</div>' +
-      '<div class="docmd-sidebar-footer"><a href="https://github.com/alesis-buzz/docmd" target="_blank" rel="noopener noreferrer">Powered by docmd</a></div>' +
+      '<aside class="docroute-sidebar">' +
+      '<div class="docroute-brand"><span class="docroute-brand-mark">M</span><span class="docroute-brand-name"></span></div>' +
+      '<div class="docroute-search"><input type="search" class="docroute-search-input" placeholder="Search…" aria-label="Search pages"></div>' +
+      '<nav class="docroute-nav"></nav>' +
+      '<div class="docroute-search-empty" hidden>No results</div>' +
+      '<div class="docroute-sidebar-footer"><a href="https://github.com/alesis-buzz/docroute" target="_blank" rel="noopener noreferrer">Powered by docroute</a></div>' +
       "</aside>" +
-      '<div class="docmd-overlay"></div>' +
-      '<div class="docmd-main">' +
-      '<header class="docmd-topbar">' +
-      '<button class="docmd-icon-btn docmd-menu-btn" type="button" aria-label="Toggle navigation">☰</button>' +
-      '<div class="docmd-crumbs"></div>' +
-      '<div class="docmd-actions">' +
-      '<button class="docmd-icon-btn docmd-theme-btn" type="button"></button>' +
+      '<div class="docroute-overlay"></div>' +
+      '<div class="docroute-main">' +
+      '<header class="docroute-topbar">' +
+      '<button class="docroute-icon-btn docroute-menu-btn" type="button" aria-label="Toggle navigation">☰</button>' +
+      '<div class="docroute-crumbs"></div>' +
+      '<div class="docroute-actions">' +
+      '<button class="docroute-icon-btn docroute-theme-btn" type="button"></button>' +
       "</div>" +
       "</header>" +
-      '<main class="docmd-content"></main>' +
+      '<main class="docroute-content"></main>' +
       "</div>";
 
-    var brandMark = root.querySelector(".docmd-brand-mark");
-    brandMark.textContent = config.name.charAt(0).toUpperCase();
-    root.querySelector(".docmd-brand-name").textContent = config.name;
-    root.querySelector(".docmd-brand").addEventListener("click", function () {
+    var brandMark = root.querySelector(".docroute-brand-mark");
+    if (config.logo) {
+      var logoImg = document.createElement("img");
+      logoImg.className = "docroute-brand-logo";
+      logoImg.src = config.logo;
+      logoImg.alt = config.name;
+      brandMark.parentNode.replaceChild(logoImg, brandMark);
+    } else {
+      brandMark.textContent = config.name.charAt(0).toUpperCase();
+    }
+    root.querySelector(".docroute-brand-name").textContent = config.name;
+    var footer = root.querySelector(".docroute-sidebar-footer");
+    if (config.footer === false) {
+      footer.hidden = true;
+    } else if (config.footer) {
+      footer.innerHTML = "";
+      if (config.footer.url) {
+        var footerLink = document.createElement("a");
+        footerLink.href = config.footer.url;
+        footerLink.target = "_blank";
+        footerLink.rel = "noopener noreferrer";
+        footerLink.textContent = config.footer.text;
+        footer.appendChild(footerLink);
+      } else {
+        footer.textContent = config.footer.text;
+      }
+    }
+    root.querySelector(".docroute-brand").addEventListener("click", function () {
       if (config.pages[0]) go(config.pages[0].slug);
     });
-    state.nav = root.querySelector(".docmd-nav");
-    state.search = root.querySelector(".docmd-search-input");
-    state.searchEmpty = root.querySelector(".docmd-search-empty");
-    state.content = root.querySelector(".docmd-content");
-    state.crumbs = root.querySelector(".docmd-crumbs");
+    state.nav = root.querySelector(".docroute-nav");
+    state.search = root.querySelector(".docroute-search-input");
+    state.searchEmpty = root.querySelector(".docroute-search-empty");
+    state.content = root.querySelector(".docroute-content");
+    state.crumbs = root.querySelector(".docroute-crumbs");
     state.nav.appendChild(buildNav(config.sections));
     state.search.addEventListener("input", filterNav);
+    state.search.setAttribute("title", "Press / to search, Esc to clear");
     state.content.addEventListener("click", copyClick);
+    bindShortcuts();
 
-    root.querySelector(".docmd-theme-btn").addEventListener("click", function () {
+    root.querySelector(".docroute-theme-btn").addEventListener("click", function () {
       applyTheme(state.theme === "dark" ? "light" : "dark");
     });
-    root.querySelector(".docmd-menu-btn").addEventListener("click", function () {
+    root.querySelector(".docroute-menu-btn").addEventListener("click", function () {
       root.classList.toggle("is-open");
     });
-    root.querySelector(".docmd-overlay").addEventListener("click", function () {
+    root.querySelector(".docroute-overlay").addEventListener("click", function () {
       root.classList.remove("is-open");
     });
     root.addEventListener("click", function (event) {
@@ -1181,9 +1434,9 @@
     (items || []).forEach(function (item) {
       if (item.type === "section") {
         var section = document.createElement("div");
-        section.className = "docmd-section";
+        section.className = "docroute-section";
         var title = document.createElement("div");
-        title.className = "docmd-section-title";
+        title.className = "docroute-section-title";
         title.textContent = item.name;
         title.dataset.name = normalizeText(item.name);
         section.appendChild(title);
@@ -1192,7 +1445,7 @@
         return;
       }
       var link = document.createElement("a");
-      link.className = "docmd-item";
+      link.className = "docroute-item";
       link.dataset.name = normalizeText(item.name);
       if (item.type === "page") {
         link.href = "#/" + item.slug;
@@ -1206,7 +1459,7 @@
         link.title = item.name;
         link.appendChild(document.createTextNode(item.name));
         var glyph = document.createElement("span");
-        glyph.className = "docmd-external-glyph";
+        glyph.className = "docroute-external-glyph";
         glyph.textContent = "↗";
         link.appendChild(glyph);
       }
@@ -1219,6 +1472,13 @@
     if (!state.search || !state.nav) return;
     var terms = normalizeText(state.search.value).split(/\s+/).filter(Boolean);
     var all = terms.length === 0;
+    var useContent = searchContentEnabled() && !all;
+
+    if (useContent && !state.indexReady && !state.indexPromise) {
+      ensureContentIndex().then(function () {
+        filterNav();
+      });
+    }
 
     function matches(name) {
       if (!name) return false;
@@ -1228,19 +1488,30 @@
       return true;
     }
 
+    function matchesContent(slug) {
+      if (!useContent || !slug) return false;
+      var haystack = state.contentIndex[slug];
+      if (haystack === undefined) return false;
+      for (var i = 0; i < terms.length; i++) {
+        if (haystack.indexOf(terms[i]) === -1) return false;
+      }
+      return true;
+    }
+
     function walk(section, ancestorMatch) {
-      var title = section.querySelector(":scope > .docmd-section-title");
+      var title = section.querySelector(":scope > .docroute-section-title");
       var titleMatch = ancestorMatch || (!!title && matches(title.dataset.name));
       var visibleChildren = 0;
       var children = section.children;
       for (var i = 0; i < children.length; i++) {
         var child = children[i];
-        if (child.classList.contains("docmd-section")) {
+        if (child.classList.contains("docroute-section")) {
           var sectionVisible = walk(child, titleMatch);
           child.hidden = !sectionVisible;
           if (sectionVisible) visibleChildren++;
-        } else if (child.classList.contains("docmd-item")) {
-          var itemVisible = all || titleMatch || matches(child.dataset.name);
+        } else if (child.classList.contains("docroute-item")) {
+          var itemVisible =
+            all || titleMatch || matches(child.dataset.name) || matchesContent(child.dataset.slug);
           child.hidden = !itemVisible;
           if (itemVisible) visibleChildren++;
         }
@@ -1254,17 +1525,23 @@
     var sections = state.nav.children;
     for (var i = 0; i < sections.length; i++) {
       var section = sections[i];
-      if (!section.classList.contains("docmd-section")) continue;
+      if (!section.classList.contains("docroute-section")) continue;
       var visible = walk(section, false);
       section.hidden = !visible;
       if (visible) visibleSections++;
     }
-    state.searchEmpty.hidden = visibleSections > 0;
+    if (visibleSections === 0 && useContent && !state.indexReady) {
+      state.searchEmpty.textContent = "Indexing…";
+      state.searchEmpty.hidden = false;
+    } else {
+      state.searchEmpty.textContent = "No results";
+      state.searchEmpty.hidden = visibleSections > 0;
+    }
   }
 
   function applyTheme(theme) {
     state.theme = theme === "light" ? "light" : "dark";
-    if (state.root) state.root.setAttribute("data-docmd-theme", state.theme);
+    if (state.root) state.root.setAttribute("data-docroute-theme", state.theme);
     updateThemeButton();
     try {
       localStorage.setItem(THEME_KEY, state.theme);
@@ -1279,7 +1556,7 @@
 
   function updateThemeButton() {
     if (!state.root) return;
-    var button = state.root.querySelector(".docmd-theme-btn");
+    var button = state.root.querySelector(".docroute-theme-btn");
     if (!button) return;
     var next = state.theme === "dark" ? "light" : "dark";
     button.textContent = state.theme === "dark" ? "☀" : "☾";
@@ -1311,19 +1588,19 @@
     parts.forEach(function (part, index) {
       if (index > 0) {
         var separator = document.createElement("span");
-        separator.className = "docmd-crumb-sep";
+        separator.className = "docroute-crumb-sep";
         separator.textContent = "·";
         state.crumbs.appendChild(separator);
       }
       var span = document.createElement("span");
       span.textContent = part;
-      if (index === parts.length - 1) span.className = "docmd-crumb-current";
+      if (index === parts.length - 1) span.className = "docroute-crumb-current";
       state.crumbs.appendChild(span);
     });
   }
 
   function markActive(slug) {
-    var items = state.nav.querySelectorAll(".docmd-item[data-slug]");
+    var items = state.nav.querySelectorAll(".docroute-item[data-slug]");
     for (var i = 0; i < items.length; i++) {
       items[i].classList.toggle("is-active", items[i].dataset.slug === slug);
     }
@@ -1331,20 +1608,20 @@
 
   function buildPager(page) {
     var pager = document.createElement("nav");
-    pager.className = "docmd-pager";
+    pager.className = "docroute-pager";
     var previous = state.config.pages[page.index - 1];
     var next = state.config.pages[page.index + 1];
     [previous ? { page: previous, label: "Previous" } : null, next ? { page: next, label: "Next", forward: true } : null]
       .filter(Boolean)
       .forEach(function (entry) {
         var link = document.createElement("a");
-        link.className = "docmd-pager-link" + (entry.forward ? " is-next" : "");
+        link.className = "docroute-pager-link" + (entry.forward ? " is-next" : "");
         link.href = "#/" + entry.page.slug;
         var label = document.createElement("span");
-        label.className = "docmd-pager-label";
+        label.className = "docroute-pager-label";
         label.textContent = entry.label;
         var name = document.createElement("span");
-        name.className = "docmd-pager-name";
+        name.className = "docroute-pager-name";
         name.textContent = entry.page.name;
         link.appendChild(label);
         link.appendChild(name);
@@ -1354,22 +1631,22 @@
   }
 
   function stateMessage(title, detail, hint) {
-    var html = '<div class="docmd-state"><strong>' + escapeHtml(title) + "</strong>";
+    var html = '<div class="docroute-state"><strong>' + escapeHtml(title) + "</strong>";
     if (detail) html += "<p>" + escapeHtml(detail) + "</p>";
     if (hint) html += "<p><code>" + escapeHtml(hint) + "</code></p>";
     return html + "</div>";
   }
 
   function skeletonHtml() {
-    var line = '<div class="docmd-skeleton-line"></div>';
+    var line = '<div class="docroute-skeleton-line"></div>';
     return (
-      '<div class="docmd-skeleton" role="status" aria-label="Loading page">' +
-      '<div class="docmd-skeleton-line docmd-skeleton-title"></div>' +
+      '<div class="docroute-skeleton" role="status" aria-label="Loading page">' +
+      '<div class="docroute-skeleton-line docroute-skeleton-title"></div>' +
       line +
       line +
       line +
       line +
-      '<div class="docmd-skeleton-block"></div>' +
+      '<div class="docroute-skeleton-block"></div>' +
       line +
       line +
       line +
@@ -1403,10 +1680,12 @@
         if (token !== state.token) return;
         state.content.setAttribute("aria-busy", "false");
         state.content.innerHTML =
-          '<article class="docmd-article">' + sanitize(result.marked.parse(result.markdown, { gfm: true })) + "</article>";
-        var article = state.content.querySelector(".docmd-article");
+          '<article class="docroute-article">' + sanitize(result.marked.parse(result.markdown, { gfm: true })) + "</article>";
+        var article = state.content.querySelector(".docroute-article");
+        if (searchContentEnabled()) state.contentIndex[page.slug] = normalizeText(result.markdown);
         if (article) {
           decorateTables(article);
+          decorateCallouts(article);
           if (state.options.copy !== false) decorateCode(article);
         }
         if (article && state.options.highlight !== false && article.querySelector("pre code")) {
@@ -1456,11 +1735,11 @@
   }
 
   function fatal(root, error) {
-    root.classList.add("docmd");
-    if (!root.getAttribute("data-docmd-theme")) root.setAttribute("data-docmd-theme", state.theme);
+    root.classList.add("docroute");
+    if (!root.getAttribute("data-docroute-theme")) root.setAttribute("data-docroute-theme", state.theme);
     root.innerHTML =
-      '<div class="docmd-main"><main class="docmd-content">' +
-      stateMessage("DocMD could not start", error && error.message ? error.message : String(error)) +
+      '<div class="docroute-main"><main class="docroute-content">' +
+      stateMessage("DocRoute could not start", error && error.message ? error.message : String(error)) +
       "</main></div>";
   }
 
@@ -1471,21 +1750,34 @@
     var root = resolveRoot(options);
     state.root = root;
     var initialTheme = storedTheme() || options.theme || "dark";
-    root.setAttribute("data-docmd-theme", initialTheme === "light" ? "light" : "dark");
+    root.setAttribute("data-docroute-theme", initialTheme === "light" ? "light" : "dark");
 
     return loadConfig(input)
       .then(function (loaded) {
         var config = normalize(loaded.raw, loaded.baseUrl);
+        if (options.logo) config.logo = options.logo;
+        if (options.favicon) config.favicon = options.favicon;
+        if (options.footer !== undefined) {
+          config.footer =
+            options.footer === false ? false : typeof options.footer === "string" ? { text: options.footer, url: options.footerUrl || null } : options.footer;
+        } else if (options.footerUrl) {
+          config.footer = config.footer === false ? false : { text: (config.footer && config.footer.text) || "Powered by docroute", url: options.footerUrl };
+        }
         state.config = config;
+        state.contentIndex = {};
+        state.indexPromise = null;
+        state.indexReady = false;
         state.theme = initialTheme === "light" ? "light" : "dark";
         if (config.theme && !storedTheme() && !options.theme) state.theme = config.theme;
         buildShell(root, config, state.theme);
         applyPrimary(options.primary || config.primary);
+        applyFavicon(config.favicon);
         state.content.addEventListener("click", contentClick);
         window.addEventListener("hashchange", onHashChange);
         var slug = slugFromHash() || (config.pages[0] && config.pages[0].slug);
         if (slug) showPage(slug);
         else state.content.innerHTML = stateMessage("Nothing to show", "This configuration has no pages.");
+        scheduleContentIndex();
         return api;
       })
       .catch(function (error) {
@@ -1495,17 +1787,24 @@
   }
 
   function autoInit() {
-    var scripts = document.querySelectorAll("script[data-docmd]");
+    var scripts = document.querySelectorAll("script[data-docroute]");
     for (var i = 0; i < scripts.length; i++) {
       var script = scripts[i];
-      var input = script.getAttribute("data-docmd");
+      var input = script.getAttribute("data-docroute");
       if (!input) continue;
+      var footerAttr = script.getAttribute("data-footer");
       InitDocs(input, {
         target: script.getAttribute("data-target") || null,
         primary: script.getAttribute("data-primary") || null,
         theme: script.getAttribute("data-theme") || null,
+        logo: script.getAttribute("data-logo") || null,
+        favicon: script.getAttribute("data-favicon") || script.getAttribute("data-icon") || null,
+        footer: footerAttr === null ? undefined : footerAttr === "false" ? false : footerAttr,
+        footerUrl: script.getAttribute("data-footer-url") || null,
         highlight: script.getAttribute("data-highlight") === "false" ? false : null,
-        copy: script.getAttribute("data-copy") === "false" ? false : null
+        copy: script.getAttribute("data-copy") === "false" ? false : null,
+        searchContent: script.getAttribute("data-search-content") === "false" ? false : null,
+        shortcuts: script.getAttribute("data-shortcuts") === "false" ? false : null
       }).catch(function (error) {
         if (window.console && console.error) console.error(error);
       });

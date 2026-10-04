@@ -41,5 +41,5 @@ hello Luis
 ---
 
 The documentation site is rendered with
-[DocMD](https://github.com/alesis-buzz/docmd) (MIT), vendored in this folder.
+[DocRoute](https://github.com/alesis-buzz/docroute) (MIT), vendored in this folder.
 
