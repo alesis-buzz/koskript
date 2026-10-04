@@ -487,6 +487,10 @@ class _Unit(object):
             self.indent += 1
             self.line("env.values[0] = values[0]")
             self.indent -= 1
+            self.line("else:")
+            self.indent += 1
+            self.line("env.values[0] = None")
+            self.indent -= 1
         elif arity == 2:
             count = self.new_temp()
             self.line(f"{count} = len(values)")
@@ -494,6 +498,10 @@ class _Unit(object):
                 self.line(f"if {count} > {index}:")
                 self.indent += 1
                 self.line(f"env.values[{index}] = values[{index}]")
+                self.indent -= 1
+                self.line("else:")
+                self.indent += 1
+                self.line(f"env.values[{index}] = None")
                 self.indent -= 1
         elif arity == 3:
             count = self.new_temp()
@@ -503,6 +511,10 @@ class _Unit(object):
                 self.indent += 1
                 self.line(f"env.values[{index}] = values[{index}]")
                 self.indent -= 1
+                self.line("else:")
+                self.indent += 1
+                self.line(f"env.values[{index}] = None")
+                self.indent -= 1
         else:
             count = self.new_temp()
             key = self.new_temp()
@@ -511,6 +523,10 @@ class _Unit(object):
             self.line(f"for {key} in range({count}):")
             self.indent += 1
             self.line(f"env.values[{key}] = values[{key}]")
+            self.indent -= 1
+            self.line(f"for {key} in range({count}, {arity}):")
+            self.indent += 1
+            self.line(f"env.values[{key}] = None")
             self.indent -= 1
 
     def _finish(self, name, header):
@@ -725,12 +741,13 @@ class _Unit(object):
 
         loop_scope = ScopeInfo(scope)
         var_index = loop_scope.declare(node.var, readonly=True)
-        loop_env = self.new_env(loop_scope, env)
         item = self.new_temp()
         body_scope = ScopeInfo(loop_scope)
         self.compiler._predeclare(node.body, body_scope)
         self.line(f"for {item} in {iterable}:")
         self.indent += 1
+        # fresh scope per iteration so closures capture this iteration's value
+        loop_env = self.new_env(loop_scope, env)
         self.line(f"{loop_env}.values[{var_index}] = {item}")
         self._emit_loop_body(node.body, body_scope, loop_scope, loop_env)
         self.indent -= 1
@@ -746,13 +763,14 @@ class _Unit(object):
         loop_scope = ScopeInfo(scope)
         key_index = loop_scope.declare(node.key, readonly=True)
         value_index = loop_scope.declare(node.var, readonly=True)
-        loop_env = self.new_env(loop_scope, env)
         key = self.new_temp()
         value = self.new_temp()
         body_scope = ScopeInfo(loop_scope)
         self.compiler._predeclare(node.body, body_scope)
         self.line(f"for {key}, {value} in {mapping}.items():")
         self.indent += 1
+        # fresh scope per iteration so closures capture this iteration's values
+        loop_env = self.new_env(loop_scope, env)
         self.line(f"{loop_env}.values[{key_index}] = {key}")
         self.line(f"{loop_env}.values[{value_index}] = {value}")
         self._emit_loop_body(node.body, body_scope, loop_scope, loop_env)
