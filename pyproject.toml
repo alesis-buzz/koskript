@@ -19,6 +19,7 @@ keywords = [
     "programming-language",
     "embedded",
     "interpreter",
+    "parser",
     "lark"
 ]
 
@@ -37,6 +38,8 @@ classifiers = [
 
 
 dependencies = [
+    # only the default parser needs it; `native_parser_experiment=True`
+    # runs without it
     "lark>=1.3.1"
 ]
 
