@@ -11,6 +11,7 @@ from koskript import KoskriptRuntime
 runtime = KoskriptRuntime()                       # standard library only
 runtime = KoskriptRuntime({"print": print})       # stdlib + your globals
 runtime = KoskriptRuntime(stdlib=False)           # nothing registered
+runtime = KoskriptRuntime(native_parser_experiment=True)   # experimental parser
 ```
 
 Arguments:
@@ -19,10 +20,42 @@ Arguments:
 |---|---|
 | `globals_map` | Mapping of names to Python values. Registered after the standard library, so it overrides it. |
 | `stdlib` | `True` (default) registers the [standard library](standard-library.md). |
+| `native_parser_experiment` | `False` (default) parses with Lark. `True` uses the experimental pure Python parser. |
 
 A runtime owns its interpreter state: globals, scopes and the standard library
 namespaces. It is not thread-safe — create one runtime per thread or guard
 access yourself.
+
+## The parser
+
+Scripts are parsed with [Lark](https://github.com/lark-parser/lark), the
+default and stable front end.
+
+`native_parser_experiment=True` switches to the experimental scanner and
+recursive descent parser written in pure Python
+([`koskript/lang/parser.py`](../src/koskript/lang/parser.py)). It reads the
+same [`grammar.lark`](../src/koskript/grammar.lark) and builds the same AST, so
+scripts behave identically, but:
+
+- it needs **no dependency**: `import koskript` never loads Lark, and neither
+  runtime does;
+- it starts faster, because the LALR tables are not built (≈35 ms instead of
+  ≈280 ms to the first script);
+- it parses about **6x faster** (≈15 ms for 55 kB instead of ≈87 ms), which
+  also makes a small `execute()` about 1.8x faster end to end.
+
+It is **experimental**: the syntax it accepts is verified against the grammar
+and against Lark, but the flag may change or disappear before the native parser
+becomes the default.
+
+```python
+runtime = KoskriptRuntime(native_parser_experiment=True)
+runtime.execute("return 1 + 2")     # 3
+```
+
+A runtime that uses the default parser without Lark installed raises
+`Errors.RuntimeError` when it is created, telling you to install it or to pass
+the flag.
 
 ## Executing code
 
@@ -38,6 +71,12 @@ result = runtime.execute("return 1 + 2")          # 3
 
 The same runtime can execute multiple scripts; top-level declarations persist
 between calls.
+
+The compiled form of a source is cached by the runtime, so running the *same*
+source again skips parsing and compiling it: only the script body runs. The
+cache holds the last 32 sources of a runtime. Top-level `local` and `const`
+declarations are shared between runs, and globals registered with `register()`
+are read again on every run, so a script always sees the current values.
 
 ## Modules
 
@@ -193,6 +232,27 @@ from koskript.lang.astgen import KoskriptTransformer
 
 tree = grammar.parse("1 + 2")
 ast = KoskriptTransformer().transform(tree)
+```
+
+`grammar` builds its LALR tables the first time you parse, not when the package
+is imported.
+
+The native parser exposes its scanner and its own entry point, which return the
+same AST without needing Lark:
+
+```python
+from koskript.lang.parser import parse
+
+ast = parse("local x = 1 + 2")
+```
+
+`parse` raises `Errors.SyntaxError` with the line, column and context, exactly
+like `execute` does, and the tokenizer is available on its own:
+
+```python
+from koskript.lang.lexer import Lexer
+
+tokens = Lexer("local x = 1").tokenize()
 ```
 
 This is an internal API; it may change between releases.

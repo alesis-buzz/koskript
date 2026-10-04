@@ -264,21 +264,73 @@ def _uses_frame(nodes):
     return False
 
 
+def _uses_loop_signal(nodes) -> bool:
+    """True when ``nodes`` contain a `break` or a `continue`.
+
+    Nested functions, lambdas, classes and error types are compiled to their
+    own Python function, which has its own handler, so their bodies are not
+    part of the enclosing one.
+    """
+    stack = list(nodes)
+    while stack:
+        node = stack.pop()
+        kind = type(node)
+        if kind is BreakStmt or kind is ContinueStmt:
+            return True
+        if kind is FnDef or kind is LambdaFnDef \
+                or kind is ClassDef or kind is ErrorDef:
+            continue
+        if kind is list:
+            stack.extend(node)
+        elif isinstance(node, tuple):
+            stack.extend(node)
+    return False
+
+
+def _captures_scope(nodes) -> bool:
+    """True when a function body can keep a reference to its own scope.
+
+    Everything that outlives the call — a nested `fn`, a lambda, a class, an
+    error type or a namespace — holds the enclosing scope, so the compiler
+    cannot recycle the scope of a function that defines one of them.
+    """
+    stack = list(nodes)
+    while stack:
+        node = stack.pop()
+        kind = type(node)
+        if kind is FnDef or kind is LambdaFnDef or kind is ClassDef \
+                or kind is ErrorDef or kind is NamespaceDef:
+            return True
+        if kind is list:
+            stack.extend(node)
+        elif isinstance(node, tuple):
+            stack.extend(node)
+    return False
+
+
 class _Unit(object):
     """Builds the Python source of a chunk or a function body."""
 
     __slots__ = ("compiler", "scope", "params", "use_frame", "ns",
                  "lines", "indent", "const_index", "temp_index", "env_index",
-                 "body_start", "create_scope", "implicit_return")
+                 "body_start", "create_scope", "implicit_return", "loop_signal",
+                 "reuse_scope")
 
     def __init__(self, compiler, scope, params=(), use_frame=False,
-                 create_scope=True, implicit_return=False):
+                 create_scope=True, implicit_return=False, loop_signal=False,
+                 reuse_scope=False):
         self.compiler = compiler
         self.scope = scope
         self.params = params
         self.use_frame = use_frame
         self.create_scope = create_scope
         self.implicit_return = implicit_return
+        # `return` becomes a real Python return, so a body without
+        # `break`/`continue` needs no try block at all.
+        self.loop_signal = loop_signal
+        # A function that cannot leak its scope recycles the one of the
+        # previous call instead of allocating a new `Scope` every time.
+        self.reuse_scope = reuse_scope
         self.ns = {
             "__builtins__": {},
             "Scope": Scope,
@@ -286,7 +338,6 @@ class _Unit(object):
             "ErrorType": ErrorType,
             "Namespace": Namespace,
             "Errors": Errors,
-            "ReturnSignal": ReturnSignal,
             "BreakSignal": BreakSignal,
             "ContinueSignal": ContinueSignal,
             "ThrownSignal": ThrownSignal,
@@ -308,6 +359,9 @@ class _Unit(object):
         self.const_index = 0
         self.temp_index = 0
         self.env_index = 0
+        if self.reuse_scope:
+            # one recycled scope per generated function
+            self.ns["_POOL"] = [None]
 
     # LOW LEVEL #################################################################
 
@@ -352,7 +406,22 @@ class _Unit(object):
     def open_function(self):
         if self.create_scope:
             constant = self.add_const(self.scope)
-            self.line(f"env = Scope(closure, {constant})")
+            if self.reuse_scope:
+                blank = self.add_const([UNBOUND] * self.scope.size)
+                self.line("env = _POOL[0]")
+                self.line("_POOL[0] = None")
+                self.line("if env is None:")
+                self.indent += 1
+                self.line(f"env = Scope(closure, {constant})")
+                self.indent -= 1
+                self.line("else:")
+                self.indent += 1
+                # the recycled scope also has to follow the new closure
+                self.line("env.parent = closure")
+                self.line(f"env.values[:] = {blank}")
+                self.indent -= 1
+            else:
+                self.line(f"env = Scope(closure, {constant})")
         else:
             self.line("env = closure")
         self._bind_params()
@@ -361,31 +430,49 @@ class _Unit(object):
             self.line("__frames.append(frame)")
         if self.implicit_return:
             self.line("__r = None")
-        self.line("try:")
-        self.indent += 1
+        if self.loop_signal or self.use_frame:
+            self.line("try:")
+            self.indent += 1
         self.body_start = len(self.lines)
+
+    def _return(self, source):
+        """Emit a return, giving the scope back to the pool first.
+
+        The value is evaluated into a temporary *before* the release: a
+        recursive call inside the expression would otherwise find this very
+        scope in the pool and reset it under our feet.
+        """
+        if not self.reuse_scope:
+            self.line(f"return {source}")
+            return
+        if source == "None":
+            self.line("_POOL[0] = env")
+            self.line("return None")
+            return
+        temp = self.new_temp()
+        self.line(f"{temp} = {source}")
+        self.line("_POOL[0] = env")
+        self.line(f"return {temp}")
 
     def close_function(self):
         if len(self.lines) == self.body_start:
             self.line("pass")
-        self.indent -= 1
-        self.line("except ReturnSignal as __s:")
-        self.indent += 1
-        self.line("return __s.value")
-        self.indent -= 1
-        self.line("except (BreakSignal, ContinueSignal) as __s:")
-        self.indent += 1
-        self.line("raise Errors.RuntimeError(f\"'{__s}' outside of a loop\")")
-        self.indent -= 1
+        if self.loop_signal or self.use_frame:
+            self.indent -= 1
+        if self.loop_signal:
+            self.line("except (BreakSignal, ContinueSignal) as __s:")
+            self.indent += 1
+            self.line("raise Errors.RuntimeError(f\"'{__s}' outside of a loop\")")
+            self.indent -= 1
         if self.use_frame:
             self.line("finally:")
             self.indent += 1
             self.line("__frames.pop()")
             self.indent -= 1
         if self.implicit_return:
-            self.line("return __r")
+            self._return("__r")
         else:
-            self.line("return None")
+            self._return("None")
         return self._finish(
             "__fn",
             "def __fn(_i, closure, values, frame, _g=lookup_name, "
@@ -470,8 +557,12 @@ class _Unit(object):
         elif kind is ImportStmt:
             self._emit_import(node, scope, env)
         elif kind is ReturnStmt:
-            value = "None" if node.value is None else self.inline(node.value, scope, env)
-            self.line(f"raise ReturnSignal({value})")
+            # A real Python return: it unwinds try/finally by itself, so
+            # `return` does not need an exception.
+            if node.value is None:
+                self._return("None")
+            else:
+                self._return(self.inline(node.value, scope, env))
         elif kind is WhileStmt:
             self._emit_while(node, scope, env)
         elif kind is ForStmt:
@@ -668,8 +759,12 @@ class _Unit(object):
         self.indent -= 1
 
     def _emit_loop_body(self, statements, body_scope, parent_scope, parent_env):
-        self.line("try:")
-        self.indent += 1
+        # The try only exists to catch `break` / `continue`; a body without
+        # them (the common case) does not pay for it on every iteration.
+        wrapped = _uses_loop_signal(statements)
+        if wrapped:
+            self.line("try:")
+            self.indent += 1
         start = len(self.lines)
         if body_scope.names:
             body_env = self.new_env(body_scope, parent_env)
@@ -678,15 +773,16 @@ class _Unit(object):
             self.emit_statements(statements, parent_scope, parent_env)
         if len(self.lines) == start:
             self.line("pass")
-        self.indent -= 1
-        self.line("except ContinueSignal:")
-        self.indent += 1
-        self.line("continue")
-        self.indent -= 1
-        self.line("except BreakSignal:")
-        self.indent += 1
-        self.line("break")
-        self.indent -= 1
+        if wrapped:
+            self.indent -= 1
+            self.line("except ContinueSignal:")
+            self.indent += 1
+            self.line("continue")
+            self.indent -= 1
+            self.line("except BreakSignal:")
+            self.indent += 1
+            self.line("break")
+            self.indent -= 1
 
     def _emit_if(self, node, scope, env):
         branches = []
@@ -744,11 +840,12 @@ class _Unit(object):
         self.indent -= 1
 
         if has_catch:
-            # Control-flow signals are not errors: let them unwind normally.
-            self.line("except (ReturnSignal, BreakSignal, ContinueSignal):")
-            self.indent += 1
-            self.line("raise")
-            self.indent -= 1
+            if _uses_loop_signal(node.body):
+                # Control-flow signals are not errors: let them unwind.
+                self.line("except (BreakSignal, ContinueSignal):")
+                self.indent += 1
+                self.line("raise")
+                self.indent -= 1
 
             catch_scope = ScopeInfo(scope)
             catch_scope.declare(node.catch_name)
@@ -793,6 +890,9 @@ class Compiler(object):
 
     def compile_chunk(self, statements: list, scope_info: ScopeInfo = None,
                       base_dir: str = None):
+        # a program made of a single statement may arrive as a bare node
+        if type(statements) is not list:
+            statements = [statements]
         scope = self.interp.root_info if scope_info is None else scope_info
         self.base_dir = base_dir
         self._predeclare(statements, scope)
@@ -812,10 +912,14 @@ class Compiler(object):
         self._predeclare(body_statements, scope)
         create_scope = bool(scope.names)
         compile_scope = scope if create_scope else enclosing
+        # Only a function that cannot leak its scope may recycle one.
+        reuse_scope = create_scope and not _captures_scope(body_statements)
         unit = _Unit(self, compile_scope, params=params,
                      use_frame=_uses_frame(body_statements),
                      create_scope=create_scope,
-                     implicit_return=implicit_return)
+                     implicit_return=implicit_return,
+                     loop_signal=_uses_loop_signal(body_statements),
+                     reuse_scope=reuse_scope)
         unit.open_function()
         unit.emit_statements(body_statements, compile_scope, "env",
                              track_result=implicit_return)

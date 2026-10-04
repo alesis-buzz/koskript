@@ -24,6 +24,11 @@ and the known limitations.
 
 ## Next
 
+- Make the native parser the default. It is written and verified against the
+  grammar, and it is already available behind
+  `KoskriptRuntime(native_parser_experiment=True)`: no dependency, ~6x faster
+  parsing and a ~8x faster start. The default is still Lark until it has been
+  validated in production.
 - Runtime error locations: include line and column in runtime errors (syntax
   errors already have them).
 - Index assignment (`items[0] = 9`) and compound assignment (`+=`, `-=`, `*=`,
@@ -41,7 +46,7 @@ and the known limitations.
 - Richer classes: interfaces/abstract methods, static fields, getters/properties.
 - String interpolation.
 - Standard library growth: `time`, `os`, iterators and streams.
-- A bytecode VM and a custom parser to replace Lark.
+- A bytecode VM.
 
 ## Performance
 
@@ -52,8 +57,29 @@ tree-walking interpreter this is roughly **8-30x faster** depending on the
 workload; on `benchmark.py` the interpreter now runs between **4x and 17x**
 slower than equivalent CPython code (it used to be 90-200x).
 
-Remaining hot spots are object/class heavy code (member access, method
-dispatch) and function calls. Classes already flatten their inherited fields
-and methods into lookup caches and instance fields use direct slot access,
-so the work plan is: inline caches in the generated code for member access, a
-custom parser to replace Lark, and a bytecode VM in the long term.
+Remaining hot spots are the compiler (it turns the AST into Python code for
+every function of every script) and object/class heavy code. The compiler work
+already done:
+
+- `return` is a real Python return instead of an exception, and a loop body
+  without `break`/`continue` no longer pays for a `try` block on every
+  iteration;
+- a function that cannot leak its scope recycles the previous call's one
+  instead of allocating a `Scope` per call;
+- a runtime compiles each source once, so running the same script again skips
+  parsing and compiling it.
+
+On `examples/benchmark.kos` (620 lines) the execution went from 32 ms to
+15 ms, and re-running the same source from 142 ms to 15 ms.
+
+What is left: the generated source is 6x the size of the script and Python's
+own `compile()` is now the single biggest phase, so the next wins are inline
+caches for member access, emitting less code per name, and a bytecode VM in the
+long term.
+
+The front end has an experimental pure Python alternative: a hand written
+scanner and recursive descent parser that reads the same grammar and builds the
+same AST. It parses about **6x faster** than Lark's parse plus transform, and it
+removes the LALR table build that used to run on every import. It is opt-in with
+`KoskriptRuntime(native_parser_experiment=True)` until it replaces Lark as the
+default.
