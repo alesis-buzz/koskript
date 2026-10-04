@@ -69,13 +69,13 @@ There is an experimental dependency-free parser behind
 
 | Document | What it covers |
 |---|---|
-| [Getting started](docs/getting-started.md) | Installation, first script, a complete example |
-| [Language reference](docs/language.md) | Types, variables, operators, control flow, errors, functions, wrappers, namespaces, closures, modules, loops, strings, bytes |
-| [Classes](docs/classes.md) | Inheritance, visibility, static members, constructors, `super` |
-| [Standard library](docs/standard-library.md) | Core builtins and the `map`, `array`, `string`, `bytes`, `math` and `json` namespaces |
-| [Python interop](docs/python-interop.md) | Exposing Python values, callables and classes to scripts |
-| [Embedding guide](docs/embedding.md) | `KoskriptRuntime`, `run()`, error handling and stdlib activation |
-| [Roadmap](docs/roadmap.md) | What is done, what is planned, known limitations |
+| [Getting started](docs/docs/getting-started.md) | Installation, first script, a complete example |
+| [Language reference](docs/docs/language.md) | Types, variables, operators, control flow, errors, functions, wrappers, namespaces, closures, modules, loops, strings, bytes |
+| [Classes](docs/docs/classes.md) | Inheritance, visibility, static members, constructors, `super` |
+| [Standard library](docs/docs/standard-library.md) | Core builtins and the `map`, `array`, `string`, `bytes`, `math` and `json` namespaces |
+| [Python interop](docs/docs/python-interop.md) | Exposing Python values, callables and classes to scripts |
+| [Embedding guide](docs/docs/embedding.md) | `KoskriptRuntime`, `run()`, error handling and stdlib activation |
+| [Roadmap](docs/docs/roadmap.md) | What is done, what is planned, known limitations |
 
 ---
 

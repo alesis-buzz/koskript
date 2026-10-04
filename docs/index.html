@@ -1,20 +1,237 @@
 <!doctype html>
-<!-- Documentation UI: DocRoute (MIT) - https://github.com/alesis-buzz/docroute -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Koskript Documentation</title>
-  <link rel="stylesheet" href="docroute.css">
+  <title>Koskript — an embeddable scripting language for Python</title>
+  <meta name="description" content="Koskript is a small, embeddable scripting language for Python applications. Dynamic typing, closures, classes, modules and native Python interop.">
+  <meta property="og:title" content="Koskript — an embeddable scripting language for Python">
+  <meta property="og:description" content="Let your users script your Python application. Install with pip, expose any Python value, run scripts in a sandbox-friendly runtime.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2303dbfd'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='17' font-weight='bold' text-anchor='middle' fill='%2306333b'%3EK%3C/text%3E%3C/svg%3E">
   <style>
-    body { margin: 0; }
+    :root {
+      color-scheme: light dark;
+      --primary: #03dbfd;
+      --primary-dark: #02748a;
+      --primary-ink: #06333b;
+      --text: #1a1a1e;
+      --muted: #5c5c66;
+      --border: #e2e2e6;
+      --panel: #f6f6f8;
+      --surface: #fff;
+      --radius: 8px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary-dark: #03dbfd;
+        --primary-ink: #06333b;
+        --text: #ececef;
+        --muted: #a3a3ad;
+        --border: #2a2a31;
+        --panel: #17171c;
+        --surface: #101014;
+      }
+      a:hover { color: #8ff0ff; }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+      background: var(--surface);
+    }
+    a { color: var(--primary-dark); }
+    a:hover { color: #014e5e; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+    header.site { border-bottom: 1px solid var(--border); }
+    nav.site {
+      max-width: 760px; margin: 0 auto; padding: 14px 20px;
+      display: flex; align-items: center; gap: 20px;
+    }
+    nav.site .brand { font-weight: 700; color: var(--text); text-decoration: none; font-size: 17px; }
+    nav.site .brand svg { vertical-align: -2px; margin-right: 8px; }
+    nav.site .links { margin-left: auto; display: flex; gap: 16px; font-size: 14.5px; }
+    nav.site .links a { color: var(--muted); text-decoration: none; }
+    nav.site .links a:hover { color: var(--text); text-decoration: underline; }
+    main { padding: 56px 0 72px; }
+    h1 { font-size: 34px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 12px; }
+    .tagline { font-size: 18px; color: var(--muted); margin: 0 0 8px; }
+    .meta { font-size: 13.5px; color: var(--muted); margin: 0 0 24px; }
+    h2 { font-size: 21px; margin: 40px 0 12px; letter-spacing: -0.005em; }
+    p { margin: 0 0 14px; }
+    pre {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--primary);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      overflow-x: auto;
+      font-size: 14px;
+      line-height: 1.6;
+      margin: 0 0 16px;
+      position: relative;
+    }
+    code { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; }
+    p code, li code, td code { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 0.88em; }
+    pre code { background: none; border: none; padding: 0; }
+    pre.out { border-left-color: var(--border); color: var(--muted); }
+    .codehead {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 13px; color: var(--muted); margin: 0 0 6px;
+    }
+    .codehead .lang { font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 11.5px; }
+    .copy {
+      margin-left: auto; font: inherit; font-size: 12.5px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+      border-radius: 6px; padding: 2px 10px;
+    }
+    .copy:hover { border-color: var(--primary-dark); color: var(--text); }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0 8px; }
+    .btn {
+      display: inline-block; padding: 9px 18px; border-radius: var(--radius);
+      font-size: 15px; text-decoration: none; border: 1px solid var(--border);
+    }
+    .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); font-weight: 600; }
+    .btn.primary:hover { color: var(--primary-ink); filter: brightness(0.96); }
+    .btn.ghost { color: var(--text); background: var(--surface); }
+    .btn.ghost:hover { border-color: var(--primary-dark); color: var(--text); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 14px; }
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+    .card { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; font-size: 14.5px; }
+    .card strong { display: block; margin-bottom: 2px; font-size: 15px; }
+    .card p { margin: 0; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; margin: 0 0 14px; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    .note { color: var(--muted); font-size: 14.5px; border-top: 1px solid var(--border); margin-top: 40px; padding-top: 16px; }
+    footer.site { border-top: 1px solid var(--border); padding: 20px 0 32px; color: var(--muted); font-size: 14px; }
+    footer.site .wrap { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+    footer.site a { color: var(--muted); }
   </style>
 </head>
 <body>
-  <div id="docroute"></div>
-  <script src="docroute.js"></script>
+  <header class="site">
+    <nav class="site" aria-label="Main">
+      <a class="brand" href="./"><svg width="16" height="16" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#03dbfd"/><text x="16" y="22" font-family="monospace" font-size="17" font-weight="bold" text-anchor="middle" fill="#06333b">K</text></svg>Koskript</a>
+      <div class="links">
+        <a href="docs/">Documentation</a>
+        <a href="https://github.com/alesis-buzz/koskript">GitHub</a>
+        <a href="https://pypi.org/project/koskript/">PyPI</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <h1>An embeddable scripting language for Python</h1>
+      <p class="tagline">Let your users script your Python application. Koskript parses and runs small scripts inside a <code>KoskriptRuntime</code>, and any Python value you expose becomes available to them.</p>
+      <p class="meta">Python 3.10+ &middot; MPL-2.0 &middot; install via pip</p>
+
+      <div class="btn-row">
+        <a class="btn primary" href="docs/">Read the docs</a>
+        <a class="btn ghost" href="https://github.com/alesis-buzz/koskript">GitHub</a>
+      </div>
+
+      <h2>Install</h2>
+      <div class="codehead"><span class="lang">bash</span><button class="copy" data-copy="pip install -U koskript" type="button">Copy</button></div>
+      <pre><code>pip install -U koskript</code></pre>
+      <p>The default parser ships with <code>lark</code> as a dependency. Prefer zero dependencies? Use the experimental native parser: <code>KoskriptRuntime(native_parser_experiment=True)</code>.</p>
+
+      <h2>Run a script</h2>
+      <div class="codehead"><span class="lang">python</span></div>
+      <pre><code>from koskript import KoskriptRuntime
+
+runtime = KoskriptRuntime()
+runtime.execute("""
+const names = ["Ana", "Luis"]
+array.each(names, (name) { print("hello " + name) })
+""")</code></pre>
+      <div class="codehead"><span class="lang">output</span></div>
+      <pre class="out"><code>hello Ana
+hello Luis</code></pre>
+
+      <h2>Expose your own API</h2>
+      <p>Any Python callable works out of the box — no wrappers to write by hand:</p>
+      <div class="codehead"><span class="lang">python</span></div>
+      <pre><code>runtime = KoskriptRuntime({"double": lambda x: x * 2})
+runtime.execute("return double(21)")  # 42</code></pre>
+
+      <h2>What the language looks like</h2>
+      <div class="codehead"><span class="lang">koskript</span></div>
+      <pre><code>class Counter {
+    private count = 0
+    constructor() { this.count = 1 }
+    public fn bump() {
+        this.count = this.count + 1
+        return this.count
+    }
+}
+
+const c = new Counter()
+print(c.bump() + c.bump())  # 5
+
+error HttpError (err, status) {
+    err.message = "request failed"
+    err.status = status
+}
+
+try {
+    throw HttpError(404)
+} catch e {
+    print(e.status)  # 404
+}</code></pre>
+
+      <h2>What it gives you</h2>
+      <div class="grid">
+        <div class="card"><strong>Scoping &amp; closures</strong><p><code>local</code> / <code>const</code> per block; lambdas capture their defining scope.</p></div>
+        <div class="card"><strong>Functions &amp; decorators</strong><p><code>fn</code>, lambdas, recursion, wrappers with <code>@decorator</code>.</p></div>
+        <div class="card"><strong>Classes</strong><p>Inheritance, visibility, static members, constructors, <code>super</code>.</p></div>
+        <div class="card"><strong>Control flow</strong><p><code>if</code> / <code>elseif</code> / <code>else</code>; <code>while</code>, <code>for</code>, <code>foreach</code>.</p></div>
+        <div class="card"><strong>Errors</strong><p><code>error</code>, <code>throw</code>, <code>try</code> / <code>catch</code> / <code>finally</code>.</p></div>
+        <div class="card"><strong>Embedding</strong><p>Modules, namespaces, stdlib (<code>array</code>, <code>map</code>, <code>string</code>, <code>math</code>, <code>json</code>…), Python interop.</p></div>
+      </div>
+
+      <h2>Documentation</h2>
+      <table>
+        <thead><tr><th>Document</th><th>What it covers</th></tr></thead>
+        <tbody>
+          <tr><td><a href="docs/#getting-started">Getting started</a></td><td>Installation, first script, a complete example</td></tr>
+          <tr><td><a href="docs/#language">Language reference</a></td><td>Types, variables, operators, control flow, functions, modules, strings, bytes</td></tr>
+          <tr><td><a href="docs/#classes">Classes</a></td><td>Inheritance, visibility, static members, constructors, <code>super</code></td></tr>
+          <tr><td><a href="docs/#standard-library">Standard library</a></td><td>Core builtins and the <code>map</code>, <code>array</code>, <code>string</code>, <code>bytes</code>, <code>math</code>, <code>json</code> namespaces</td></tr>
+          <tr><td><a href="docs/#python-interop">Python interop</a></td><td>Exposing Python values, callables and classes to scripts</td></tr>
+          <tr><td><a href="docs/#embedding-guide">Embedding guide</a></td><td><code>KoskriptRuntime</code>, <code>run()</code>, error handling, stdlib setup</td></tr>
+          <tr><td><a href="docs/#roadmap">Roadmap</a></td><td>What is done, what is planned, known limitations</td></tr>
+        </tbody>
+      </table>
+
+      <p class="note">Koskript is in early development; the language and its API may change between releases. License: MPL-2.0.</p>
+    </div>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">
+      <span>Koskript</span>
+      <a href="docs/">Documentation</a>
+      <a href="https://github.com/alesis-buzz/koskript">GitHub</a>
+      <a href="https://pypi.org/project/koskript/">PyPI</a>
+    </div>
+  </footer>
+
   <script>
-    docroute.InitDocs("docs.json");
+    document.querySelectorAll("[data-copy]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var done = function () {
+          btn.textContent = "Copied";
+          setTimeout(function () { btn.textContent = "Copy"; }, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(btn.getAttribute("data-copy")).then(done, done);
+        }
+      });
+    });
   </script>
 </body>
 </html>
