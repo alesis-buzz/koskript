@@ -7,16 +7,30 @@ STRING    : /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/
 // of NAME + STRING.
 BYTES.2   : /[bB]"(?:\\.|[^"\\])*"|[bB]'(?:\\.|[^'\\])*'/
 COMMENT   : /\/\/[^\n]*/
+
+// A `.`, `::`, `[` or `(` that starts a physical line. The scanner never
+// produces these terminals: `lang/larklex.py` rewrites the tokens that begin
+// a line into them before the parser runs, so a postfix operator can only
+// continue the expression above it when both are on the same line (see
+// `?postfix` below). The patterns must never match text — and must not be
+// written as `"("` or the loader would intern every `"("` of the grammar
+// into this terminal.
+_LINE_DOT    : /(?!)d/
+_LINE_DCOLON : /(?!)c/
+_LINE_LPAR   : /(?!)p/
+_LINE_LSQB   : /(?!)b/
 // Matches a bare `return` at the end of a line (or before a comment/EOF).
 // Higher priority so it wins over the `return` keyword on equal length.
 RETURN_VOID.2 : /return[ \t]*(?=\/\/|\n|$)/
 
-array: "[" [expr ("," expr)* [","]] "]"
+// A line-start `[` opens an array literal (a new statement), never indexes
+// the expression above: see `?postfix`.
+array: ("[" | _LINE_LSQB) [expr ("," expr)* [","]] "]"
 bool: "true" -> bool_true
     | "false" -> bool_false
 
-lambda_fn: "(" ")" block
-         | "(" expr ("," expr)* ")" block -> lambda_fn_args
+lambda_fn: ("(" | _LINE_LPAR) ")" block
+         | ("(" | _LINE_LPAR) expr ("," expr)* ")" block -> lambda_fn_args
 
 map_obj: expr ":" expr
 map: "{" [map_obj ("," map_obj)* [","]] "}"
@@ -53,8 +67,8 @@ import_stmt  : "import" STRING "as" NAME -> import_as
              | "import" STRING -> import_plain
 
 // ── Errors ─────────────────────────────────────────────────
-error_def    : "error" NAME "(" param_list ")" block
-             | "error" NAME "(" ")" block -> error_def_nargs
+error_def    : "error" NAME ("(" | _LINE_LPAR) param_list ")" block
+             | "error" NAME ("(" | _LINE_LPAR) ")" block -> error_def_nargs
 
 throw_stmt   : "throw" expr
 
@@ -67,7 +81,9 @@ local_decl   : "local" NAME "=" expr
 const_decl   : "const" NAME "=" expr
 decl: NAME "=" expr
 
-// Assignment to a member: `this.x = value`, `obj.x = value`
+// Assignment to a member: `this.x = value`, `obj.x = value`. The `.` must be
+// on the same line: a line-start `.` ends the expression above it, so
+// `obj\n.x = 1` is two statements (and a syntax error), not an assignment.
 member_assign: postfix "." NAME "=" expr
 
 // ── Class definition ───────────────────────────────────────
@@ -89,7 +105,7 @@ namespace_def : "namespace" NAME block
 // `@Name` / `@Name(args)` placed above a function or method wraps it,
 // like Python decorators: `@Name` is `fn = Name(fn)` and
 // `@Name(args)` is `fn = Name(args)(fn)`.
-decorator     : "@" dotted_name "(" [arg_list] ")" -> decorator_call
+decorator     : "@" dotted_name ("(" | _LINE_LPAR) [arg_list] ")" -> decorator_call
               | "@" dotted_name -> decorator_plain
 
 decorated_fn      : decorator+ fn_def
@@ -103,21 +119,21 @@ modifier      : "static"  -> mod_static
 field_decl    : modifier* NAME "=" expr
 
 // Methods default to public when no visibility modifier is given.
-method_def    : modifier* "fn" NAME "(" param_list ")" block -> method_def_args
-              | modifier* "fn" NAME "(" ")" block -> method_def_nargs
+method_def    : modifier* "fn" NAME ("(" | _LINE_LPAR) param_list ")" block -> method_def_args
+              | modifier* "fn" NAME ("(" | _LINE_LPAR) ")" block -> method_def_nargs
 
-constructor_def : modifier* "constructor" "(" param_list ")" block -> constructor_def_args
-                | modifier* "constructor" "(" ")" block -> constructor_def_nargs
+constructor_def : modifier* "constructor" ("(" | _LINE_LPAR) param_list ")" block -> constructor_def_args
+                | modifier* "constructor" ("(" | _LINE_LPAR) ")" block -> constructor_def_nargs
 
 // ── Function definition ────────────────────────────────────
-fn_def       : "fn" NAME "(" param_list ")" block
-            | "fn" NAME "(" ")" block -> fn_def_nargs
+fn_def       : "fn" NAME ("(" | _LINE_LPAR) param_list ")" block
+            | "fn" NAME ("(" | _LINE_LPAR) ")" block -> fn_def_nargs
 
 // ── Wrapper definition ─────────────────────────────────────
 // A wrapper is a function whose last expression is returned
 // implicitly. It is meant to be used as a decorator.
-wrapper_def  : "wrapper" NAME "(" param_list ")" block
-            | "wrapper" NAME "(" ")" block -> wrapper_def_nargs
+wrapper_def  : "wrapper" NAME ("(" | _LINE_LPAR) param_list ")" block
+            | "wrapper" NAME ("(" | _LINE_LPAR) ")" block -> wrapper_def_nargs
 
 param_list : NAME ("," NAME)*
 
@@ -128,20 +144,20 @@ return_stmt  : "return" expr? -> return_value
              | RETURN_VOID    -> return_void
 
 // ── While ──────────────────────────────────────────────────
-while_stmt   : "while" "(" expr ")" block
+while_stmt   : "while" ("(" | _LINE_LPAR) expr ")" block
 
 // ── Break / Continue ───────────────────────────────────────
 break_stmt    : "break"
 continue_stmt : "continue"
 
 // ── For loops ──────────────────────────────────────────────
-for_stmt     : "for" "(" NAME "in" expr ")" block
-foritem_stmt : "foreach" "(" NAME "," NAME "in" expr ")" block
+for_stmt     : "for" ("(" | _LINE_LPAR) NAME "in" expr ")" block
+foritem_stmt : "foreach" ("(" | _LINE_LPAR) NAME "," NAME "in" expr ")" block
 
 // ── If ─────────────────────────────────────────────────────
 
-if_stmt: "if" "(" expr ")" block elseif_stmt* elsestmt?
-elseif_stmt: "elseif" "(" expr ")" block
+if_stmt: "if" ("(" | _LINE_LPAR) expr ")" block elseif_stmt* elsestmt?
+elseif_stmt: "elseif" ("(" | _LINE_LPAR) expr ")" block
 elsestmt: "else" block
 
 // ── Block ──────────────────────────────────────────────────
@@ -150,6 +166,11 @@ block        : "{" statement* "}"
 // ── Expressions ────────────────────────────────────────────
 // Precedence, lowest to highest:
 //   or  <  and  <  not  <  comparison  <  +/-  <  *//%  <  unary  <  postfix
+//
+// A postfix operator only chains when it is on the same line as the
+// expression it continues: `.`, `::`, `[` and `(` that start a physical line
+// are rewritten to `_LINE_*` by `lang/larklex.py`, which only the statement
+// positions below accept. Newlines stay plain whitespace everywhere else.
 ?expr_stmt    : expr
 
 ?expr         : or_expr
@@ -187,7 +208,7 @@ block        : "{" statement* "}"
               | postfix "." NAME -> member_access
               | postfix "[" expr "]" -> index_access
               | postfix "(" [arg_list] ")" -> fn_call
-              | postfix "::" NAME "(" [arg_list] ")" -> bound_method_call
+              | postfix "::" NAME ("(" | _LINE_LPAR) [arg_list] ")" -> bound_method_call
 
 ?atom         : NUMBER
               | STRING
@@ -203,20 +224,20 @@ block        : "{" statement* "}"
               | static_ref
               | lambda_fn
               | NAME
-              | "(" expr ")"
+              | ("(" | _LINE_LPAR) expr ")"
 
 // ── Classes (expressions) ──────────────────────────────────
 // A qualified reference: `Name` or `Name.Member.Other`.
-dotted_name  : NAME ("." NAME)*
+dotted_name  : NAME (("." | _LINE_DOT) NAME)*
 
-new_expr     : "new" dotted_name "(" [arg_list] ")"
+new_expr     : "new" dotted_name ("(" | _LINE_LPAR) [arg_list] ")"
 // `::Method()` — calls an instance method with the current `this`
-method_call  : "::" NAME "(" [arg_list] ")"
+method_call  : ("::" | _LINE_DCOLON) NAME ("(" | _LINE_LPAR) [arg_list] ")"
 // `super::Method()` — calls the parent implementation
-super_call   : "super" "::" NAME "(" [arg_list] ")"
-             | "super" "::" "constructor" "(" [arg_list] ")" -> super_constructor_call
+super_call   : "super" ("::" | _LINE_DCOLON) NAME ("(" | _LINE_LPAR) [arg_list] ")"
+             | "super" ("::" | _LINE_DCOLON) "constructor" ("(" | _LINE_LPAR) [arg_list] ")" -> super_constructor_call
 // `.Method()` — calls a static method of the current class
-static_ref   : "." NAME
+static_ref   : ("." | _LINE_DOT) NAME
 
 arg_list     : expr ("," expr)*
 

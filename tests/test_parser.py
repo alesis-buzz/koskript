@@ -464,6 +464,11 @@ class ParserSelectionTest(unittest.TestCase):
         'foreach (k, v in { "a": "x", "b": "y" }) { return k + v }',
         "local b = b\"\\x01\\x02\"\nreturn len(b) + b[1]",
         "local i = 0\nwhile (i < 3) { i = i + 1 }\nreturn i",
+        # a postfix operator that starts a line ends the statement, so these
+        # run as written and not as chained calls
+        "local r = 5\nreturn (r >= 0) and (r < 1)",
+        "fn id(x) { return x }\nlocal a = id\n(1)\nreturn a(2)",
+        "local arr = [7, 8]\nlocal x = arr\n[9]\nreturn len(x)",
     ]
 
     def test_default_uses_lark_and_the_flag_uses_the_native_parser(self):
@@ -499,11 +504,20 @@ class ParserSelectionTest(unittest.TestCase):
                     tree_ast = [tree_ast]
                 self.assertEqual(parse(script), tree_ast)
 
+    # sources that both front ends must reject: a postfix operator that
+    # starts a line does not continue the expression above it
+    BROKEN_LINE_START = [
+        "f(a\n(b))",
+        "obj\n.field = 1",
+        "a\n[0] = 1",
+    ]
+
     def test_both_parsers_reject_the_same_sources(self):
         from koskript import KoskriptRuntime, Errors
 
         broken = ["local = 1", "fn f( {", "a[0] = 1", "class A { local x = 1 }",
-                  "return not", "a < b < c", "(a) = 1", "local in = 1"]
+                  "return not", "a < b < c", "(a) = 1", "local in = 1"] \
+            + self.BROKEN_LINE_START
         default = KoskriptRuntime()
         native = KoskriptRuntime(native_parser_experiment=True)
         for script in broken:
@@ -512,6 +526,54 @@ class ParserSelectionTest(unittest.TestCase):
                     default.execute(script)
                 with self.assertRaises(Errors.SyntaxError):
                     native.execute(script)
+
+    # sources only worth comparing as trees: they call names that need not
+    # exist, or end in a static reference outside a class
+    LINE_START_CASES = [
+        "local a = b\n(1)",
+        "local a = b\n[1]",
+        "local a = b\n.c",
+        "local a = b\n::c()",
+        "foo\n(1)",
+        "foo\n[1]",
+        "foo\n.bar",
+        "foo\n::bar()",
+        "local a = b\n.c[0](1)",
+        "f(\n1,\n2)",
+        "f(\n(1))",
+        "f(a,\n(1))",
+        "while\n(a) { }",
+        "if\n(a) { } elseif\n(b) { } else { }",
+        "for\n(i in x) { }",
+        "foreach\n(k, v in x) { }",
+        "local f =\n(x) { return x }",
+        "if (a) { }\n.build()",
+        "local x = 1 +\n(2)",
+        "foo() // note\n(1)",
+        'foo("a\nb")(1)',
+        "obj::m\n(1)",
+        "new A\n(1)",
+        "class A extends B\n.C { }",
+        "@d\n.ns\nfn f() { }",
+        "fn f\n(a) { }",
+        "class A { fn m\n(a) { }\nconstructor\n(a) { } }",
+        "error E\n(e) { }",
+        "wrapper w\n(a) { }",
+        "local a = b\n::c()::d()",
+    ]
+
+    def test_both_parsers_agree_on_line_start_postfix(self):
+        """A `.`, `::`, `[` or `(` that starts a line never chains."""
+        from koskript.lang.astgen import KoskriptTransformer
+        from koskript.lang.parser import parse
+
+        transformer = KoskriptTransformer()
+        for script in self.LINE_START_CASES:
+            with self.subTest(script=script):
+                tree_ast = transformer.transform(grammar.parse(script))
+                if not isinstance(tree_ast, list):
+                    tree_ast = [tree_ast]
+                self.assertEqual(parse(script), tree_ast)
 
     def run_python(self, script):
         """Run ``script`` in a clean process that imports this checkout."""

@@ -45,8 +45,10 @@ class _Grammar(object):
         """Parse ``code`` into a Lark tree."""
         if self.parser is None:
             with open(self.path, "r") as grammar_file:
+                from .lang.larklex import LineStartRetag
                 self.parser = _require_lark()(
-                    grammar_file.read(), parser="lalr", maybe_placeholders=False)
+                    grammar_file.read(), parser="lalr",
+                    maybe_placeholders=False, postlex=LineStartRetag())
         return self.parser.parse(code)
 
 
@@ -55,6 +57,11 @@ grammar = _Grammar(_grammar_path)
 # How many compiled sources a runtime keeps. Running the same script again is
 # then free of parsing and compiling; the oldest entry is dropped past this.
 _CHUNK_CACHE = 32
+
+# Internal grammar terminals shown as the punctuation they stand for, so the
+# "Expected one of" line of a Lark error does not leak the `_LINE_*` names.
+_DISPLAY_NAMES = {"_LINE_LPAR": "'('", "_LINE_LSQB": "'['",
+                  "_LINE_DOT": "'.'", "_LINE_DCOLON": "'::'"}
 
 
 def _format_syntax_error(code: str, error) -> str:
@@ -71,7 +78,8 @@ def _format_syntax_error(code: str, error) -> str:
 
     expected = getattr(error, "expected", None)
     if expected:
-        lines.append("Expected one of: " + ", ".join(sorted(expected)))
+        lines.append("Expected one of: " + ", ".join(sorted(
+            _DISPLAY_NAMES.get(name, name) for name in expected)))
 
     return "\n".join(lines)
 

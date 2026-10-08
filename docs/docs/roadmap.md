@@ -20,6 +20,8 @@ and the known limitations.
 - Python interop: values, callables, objects and classes (dunder attributes are blocked)
 - [Standard library](standard-library.md): core builtins plus `map`, `array`, `string`, `bytes`, `math` and `json`
 - Compiled execution engine (AST to Python code) with lexical slot resolution
+- Line-based statement continuation: a `.`, `::`, `[` or `(` that starts a
+  line ends the expression above it instead of chaining (both parsers)
 - PyPI package
 
 ## Next
@@ -35,8 +37,6 @@ and the known limitations.
   `/=`, `%=`).
 - Wrap host exceptions raised while evaluating (for example `ZeroDivisionError`)
   as `Errors.RuntimeError`.
-- Fix the newline/call chaining ambiguity: a line starting with `(` after a call
-  is parsed as a chained call.
 - A CI pipeline running the committed test suite.
 
 ## Later

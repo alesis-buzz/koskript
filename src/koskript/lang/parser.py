@@ -15,7 +15,11 @@ table used to resolve them:
   a single member access, and a plain expression statement otherwise,
 * ``return`` without a value is the ``RETURN_VOID`` token (see
   :mod:`.lexer`), so ``return`` at the end of a line never swallows the next
-  statement as its value.
+  statement as its value,
+* a postfix operator (``.``, ``::``, ``[``, ``(``) that starts a new line
+  ends the statement instead of chaining, matching the ``_LINE_*`` terminals
+  of the Lark grammar. A token carries that position in its ``line_start``
+  flag (see :mod:`.lexer`).
 """
 
 from .emtypes import *
@@ -48,6 +52,11 @@ _EXPRESSION_START = frozenset((
     "INT", "FLOAT", "STRING", "BYTES", "NAME", "[", "{", "(", "-", ".",
     "true", "false", "null", "this", "new", "super", "::", "not",
 ))
+
+# The postfix operators, the only tokens that extend an expression to the
+# right. One of them at the beginning of a line ends the statement instead
+# of chaining, like the `_LINE_*` terminals of the Lark grammar.
+_CHAINED = frozenset((".", "::", "[", "("))
 
 _NAMES = ("a name",)
 
@@ -489,7 +498,14 @@ class Parser(object):
     def parse_postfix(self):
         node = self.parse_atom()
         while True:
-            kind = self._current().type
+            token = self._current()
+            kind = token.type
+
+            # A postfix operator that starts a new line ends the statement
+            # instead of chaining: `foo()\n(1)` is two statements, not the
+            # call `foo()(1)`.
+            if kind in _CHAINED and token.line_start:
+                return node
 
             if kind == ".":
                 self.pos += 1

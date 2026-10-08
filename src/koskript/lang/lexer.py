@@ -13,8 +13,11 @@ Token types are:
 * ``INT``, ``FLOAT``, ``STRING`` and ``BYTES`` for literals,
 * ``EOF`` at the end of the source.
 
-Like the grammar, newlines are plain whitespace: only the syntax decides where
-a statement ends. The one exception is ``return``, which is lexed as the
+Newlines are plain whitespace, but not quite invisible: every token carries a
+``line_start`` flag with whether a newline separates it from the previous
+token, which is how a postfix operator (``.``, ``::``, ``[``, ``(``) at the
+beginning of a line is kept from continuing the expression above it (see
+:mod:`.parser`). The other exception is ``return``, which is lexed as the
 ``RETURN_VOID`` token when it is the last thing on its line, so ``return``
 without a value can be told apart from ``return <expression>``.
 """
@@ -123,9 +126,16 @@ class Token(object):
 
     ``line`` and ``column`` are computed on demand, because only the token
     reported in an error message ever needs them.
+
+    ``line_start`` is ``True`` when a newline separates the token from the
+    previous one. It is what stops a postfix operator at the beginning of a
+    line from continuing the expression above it (see
+    :meth:`Parser.parse_postfix <.parser.Parser.parse_postfix>`); the other
+    tokens keep it as plain information.
     """
 
-    __slots__ = ("type", "value", "text", "offset", "_lines", "_line")
+    __slots__ = ("type", "value", "text", "offset", "_lines", "_line",
+                 "line_start")
 
     def __init__(self, type, value, text, offset, lines):
         self.type = type
@@ -134,6 +144,7 @@ class Token(object):
         self.offset = offset
         self._lines = lines
         self._line = 0
+        self.line_start = False
 
     @property
     def line(self):
@@ -210,7 +221,11 @@ class Lexer(object):
         self.line_starts = line_starts
 
     def tokenize(self) -> list:
-        """Return every token of the source, ending with the ``EOF`` one."""
+        """Return every token of the source, ending with the ``EOF`` one.
+
+        Every token gets its ``line_start`` flag: whether a newline
+        separates it from the previous one.
+        """
         tokens = []
         append = tokens.append
         while self.pos < self.length:
@@ -239,6 +254,15 @@ class Lexer(object):
                 append(self._operator())
 
         append(self._make_token("EOF", None, "", self.length))
+
+        # A token starts a line when a newline separates it from the
+        # previous one; a newline inside a string literal belongs to the
+        # literal, not to what follows it, which this gets right by
+        # measuring the raw text between both tokens.
+        previous_end = 0
+        for token in tokens:
+            token.line_start = "\n" in self.code[previous_end:token.offset]
+            previous_end = token.offset + len(token.text)
         return tokens
 
     # SCANNERS ##################################################################

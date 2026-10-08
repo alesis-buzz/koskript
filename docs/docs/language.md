@@ -409,6 +409,12 @@ Assignment to a map key uses the same syntax:
 user.age = 18
 ```
 
+On class instances the same `.` reads fields and calls methods
+(`rex.speak()`), while `::` is reserved for instance methods: `::Method()`
+inside a class, `instance::Method()` from outside and `super::Method()` for
+the parent implementation. See [Dot vs double colon](classes.md#dot-vs-double-colon)
+for the full comparison.
+
 ## Index Access
 
 ```koskript
@@ -419,7 +425,7 @@ print(items[-1])       // 30
 local config = { "debug": true }
 print(config["debug"]) // true
 
-// member access and indexing can be chained
+// member access and indexing can be chained on the same line
 local data = { "nums": [1, 2, 3] }
 print(data.nums[1])    // 2
 ```
@@ -498,17 +504,28 @@ possible; the standard library uses `array.each` instead.
 
 ## Gotchas
 
-Newlines are plain whitespace, so a line that starts with `(` after a previous
-line ending in `)` is parsed as a **chained call**:
+Newlines are plain whitespace, with one exception: a line that **starts**
+with `.`, `::`, `[` or `(` never continues the expression above it. A
+postfix operator must stay on the same line as the expression it extends:
 
 ```koskript
 local r = math.random()
-local ok = (r >= 0) and (r < 1)   // fine: the line starts with `local`
+(r >= 0) and (r < 1)   // two statements: the call, then the condition
 
-// Avoid this:
-// local r = math.random()
-// (r >= 0) and (r < 1)           // parsed as math.random()(r >= 0) ...
+local a = f(1)(2)      // same line: chained calls
+
+local b = f(1)
+[2]                    // two statements: the call, then an array
 ```
 
-Assign the expression to a variable first, or put the condition on the same
-line as the call.
+The rule looks at lines, not at syntax, so a line-start `(` or `[` has to be
+a complete expression on its own. Inside a call's parentheses it can only
+begin a new argument (right after a comma), so `f(a` followed by a line
+starting with `(b))` is a syntax error: keep the call on one line or split
+the arguments after the commas.
+
+```koskript
+local x = values.filter(
+    (v) { return v > 0 },   // fine: the line starts a new argument
+)
+```

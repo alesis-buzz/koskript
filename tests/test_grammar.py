@@ -232,6 +232,16 @@ TERMINALS = {
     "RETURN_VOID": "fn f() { return\n}",
 }
 
+# terminals the scanner never produces: `lang/larklex.py` rewrites the `.`,
+# `::`, `[` and `(` that start a physical line into them before the Lark
+# parser runs, so they only exist between scanner and parser
+RETAGGED = {
+    "_LINE_DOT": "local a = b\n.c",
+    "_LINE_DCOLON": "local a = b\n::c()",
+    "_LINE_LSQB": "local a = b\n[1]",
+    "_LINE_LPAR": "local a = b\n(1)",
+}
+
 # the scanner names numeric tokens after their type, not after the terminal
 TOKEN_TYPES = {"NUMBER": ("INT", "FLOAT")}
 
@@ -365,6 +375,12 @@ REJECTED = [
     ("lambda: empty parens and no block", "()"),
     ("dotted_name: nothing after the dot", "new A.()"),
     ("index_access: index is never closed", "a[0"),
+
+    # a postfix operator at the start of a line ends the statement, so the
+    # tokens that follow cannot continue the one above
+    ("fn_call: line-start paren does not chain", "f(a\n(b))"),
+    ("member_assign: line-start dot does not chain", "obj\n.field = 1"),
+    ("index_access: line-start bracket does not chain", "a\n[0] = 1"),
 ]
 
 
@@ -376,7 +392,7 @@ class ProductionCoverageTest(unittest.TestCase):
 
     def test_every_production_is_covered(self):
         covered = set(NODE_CASES) | set(LIST_CASES) | set(TERMINALS) \
-            | set(MODIFIER_CASES)
+            | set(MODIFIER_CASES) | set(RETAGGED)
         declared = set(productions())
         self.assertEqual(declared - covered, set(),
                          "productions of grammar.lark without a test case")
@@ -416,6 +432,30 @@ class ProductionTest(unittest.TestCase):
                 if terminal != "COMMENT":
                     self.assertTrue(set(TOKEN_TYPES.get(terminal, (terminal,)))
                                     & types, f"{source!r} has no {terminal}")
+
+    def test_retagged_terminals_come_from_a_line_start(self):
+        """The `_LINE_*` tokens exist only between scanner and parser."""
+        # the operator each `_LINE_*` terminal stands for
+        operator_of = {"_LINE_DOT": ".", "_LINE_DCOLON": "::",
+                       "_LINE_LSQB": "[", "_LINE_LPAR": "("}
+
+        for terminal, source in RETAGGED.items():
+            with self.subTest(terminal=terminal, source=source):
+                self.assertIsInstance(parse(source), list)
+                operator = operator_of[terminal]
+                types = {token.type for token in Lexer(source).tokenize()}
+                self.assertNotIn(terminal, types,
+                                 f"the scanner must not produce {terminal}")
+
+                # the operator that starts the line carries the flag the
+                # parser stops at, and the same operator on one line does not
+                on_line = [token for token in Lexer(source).tokenize()
+                           if token.type == operator]
+                self.assertTrue(on_line[0].line_start, terminal)
+                same_line = [token for token in
+                             Lexer(source.replace("\n", " ")).tokenize()
+                             if token.type == operator]
+                self.assertFalse(same_line[0].line_start, terminal)
 
     def test_modifier_productions(self):
         for production, (source, expected) in MODIFIER_CASES.items():
@@ -600,6 +640,13 @@ class TerminalPatternTest(unittest.TestCase):
         "RETURN_VOID": (["return", "return ", "return\t", "return// c",
                          "return\n", "return  \t\n"],
                         ["return 1", "returnx", "returns", "return\r"]),
+
+        # never matched: the retagger produces them from the operators that
+        # start a line, so the scanner must not read them off the source
+        "_LINE_DOT": ([], [".", "::", "(", "[", "a"]),
+        "_LINE_DCOLON": ([], [".", "::", "(", "[", "a"]),
+        "_LINE_LPAR": ([], [".", "::", "(", "[", "a"]),
+        "_LINE_LSQB": ([], [".", "::", "(", "[", "a"]),
     }
 
     def first_token(self, text):
@@ -636,7 +683,9 @@ class TerminalPatternTest(unittest.TestCase):
         types = {"NAME": ("NAME",), "NUMBER": ("INT", "FLOAT"),
                  "STRING": ("STRING",), "BYTES": ("BYTES",),
                  "COMMENT": ("EOF",),          # comments are %ignore'd
-                 "RETURN_VOID": ("RETURN_VOID",)}
+                 "RETURN_VOID": ("RETURN_VOID",),
+                 "_LINE_DOT": ("_LINE_DOT",), "_LINE_DCOLON": ("_LINE_DCOLON",),
+                 "_LINE_LPAR": ("_LINE_LPAR",), "_LINE_LSQB": ("_LINE_LSQB",)}
 
         for name, (accepted, rejected) in self.SAMPLES.items():
             pattern = re.compile(patterns[name])
@@ -676,7 +725,7 @@ class TerminalPatternTest(unittest.TestCase):
 
 
 class WhitespaceTest(unittest.TestCase):
-    """Newlines are plain whitespace, like in the grammar."""
+    """Newlines are plain whitespace, except before a postfix operator."""
 
     def test_newlines_do_not_end_a_statement(self):
         self.assertEqual(parse("local a = 1\nlocal b = 2"),
@@ -694,6 +743,19 @@ class WhitespaceTest(unittest.TestCase):
                          parse("local a = 1 local b = 2"))
         self.assertEqual(parse("fn f() {\r\n  return\r\n}")[0].body,
                          [emtypes.ReturnStmt(value=None)])
+
+    def test_a_line_starting_postfix_ends_a_statement(self):
+        # `.`, `::`, `[` and `(` at the start of a line never continue the
+        # expression above them: there are two statements, not one chain
+        for operator in ("(1)", "[1]", ".c", "::c()"):
+            with self.subTest(operator=operator):
+                self.assertEqual(len(parse(f"local a = b\n{operator}")), 2)
+                self.assertEqual(len(parse(f"if (x) {{ }}\n{operator}")), 2)
+
+    def test_a_line_starting_postfix_still_chains_inside_one_token(self):
+        # a newline inside a string literal is part of the literal, so the
+        # `(` after it is on the same line as the closing quote
+        self.assertEqual(len(parse('foo("a\nb")(1)')), 1)
 
 
 if __name__ == "__main__":
