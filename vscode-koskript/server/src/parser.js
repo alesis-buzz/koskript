@@ -354,6 +354,25 @@ function collectSymbols(code, baseDir) {
   const constRe = /\bconst\s+([A-Za-z_][A-Za-z0-9_]*)/g;
   while ((m = constRe.exec(code)) !== null) syms.constants.push(m[1]);
 
+  // namespaces
+  const nsRe = /\bnamespace\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{/g;
+  let nsm;
+  while ((nsm = nsRe.exec(code)) !== null) {
+    let depth = 1;
+    let i = nsm.index + nsm[0].length;
+    while (i < code.length && depth > 0) {
+      if (code[i] === "{") depth++;
+      else if (code[i] === "}") depth--;
+      i++;
+    }
+    const body = code.slice(nsm.index + nsm[0].length, i - 1);
+    const prefix = nsm[1] + ".";
+    const inner = collectSymbols(body, baseDir);
+    for (const f of inner.functions) syms.functions.push(prefix + f);
+    for (const c of inner.classes) syms.classes.push(prefix + c);
+    for (const v of inner.constants) syms.constants.push(prefix + v);
+  }
+
   const importRe = /\bimport\s+"([^"]+)"(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?/g;
   let im;
   while ((im = importRe.exec(code)) !== null) {
