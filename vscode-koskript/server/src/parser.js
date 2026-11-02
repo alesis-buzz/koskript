@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const RESERVED = new Set([
   "if","elseif","else","while","for","foreach","fun","wrapper","return","let","const",
   "true","false","null","and","or","not","in","break","continue","class","extends","new",
@@ -342,16 +344,8 @@ function parse(code) {
   }
 }
 
-function collectSymbols(code) {
+function collectSymbols(code, baseDir) {
   const syms = { functions: [], classes: [], constants: [] };
-  let stmts;
-  try { stmts = parse(code); } catch (e) { return syms; }
-  function collect(list) {
-    for (const s of list) {
-      // statements are just {type} in this minimal parser; we lost names.
-    }
-  }
-  // Minimal: regex-based symbol extraction as fallback
   const fnRe = /\bfun\s+([A-Za-z_][A-Za-z0-9_]*)/g;
   let m;
   while ((m = fnRe.exec(code)) !== null) syms.functions.push(m[1]);
@@ -359,6 +353,28 @@ function collectSymbols(code) {
   while ((m = classRe.exec(code)) !== null) syms.classes.push(m[1]);
   const constRe = /\bconst\s+([A-Za-z_][A-Za-z0-9_]*)/g;
   while ((m = constRe.exec(code)) !== null) syms.constants.push(m[1]);
+
+  const importRe = /\bimport\s+"([^"]+)"(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?/g;
+  let im;
+  while ((im = importRe.exec(code)) !== null) {
+    const rel = im[1];
+    const alias = im[2];
+    if (!baseDir) continue;
+    let full = path.isAbsolute(rel) ? rel : path.join(baseDir, rel);
+    if (!fs.existsSync(full)) {
+      if (fs.existsSync(full + ".kosh")) full += ".kosh";
+      else if (fs.existsSync(full + ".kos")) full += ".kos";
+    }
+    if (!fs.existsSync(full)) continue;
+    try {
+      const imported = fs.readFileSync(full, "utf8");
+      const isyms = collectSymbols(imported, path.dirname(full));
+      const prefix = alias ? alias + "." : "";
+      for (const f of isyms.functions) syms.functions.push(prefix + f);
+      for (const c of isyms.classes) syms.classes.push(prefix + c);
+      for (const v of isyms.constants) syms.constants.push(prefix + v);
+    } catch (e) {}
+  }
   return syms;
 }
 

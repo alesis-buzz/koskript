@@ -1,6 +1,7 @@
 const { createConnection, TextDocuments, ProposedFeatures, TextDocumentSyncKind, CompletionItemKind } = require("vscode-languageserver/node");
 const { TextDocument } = require("vscode-languageserver-textdocument");
 const { parse, collectSymbols } = require("./parser");
+const path = require("path");
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -41,7 +42,7 @@ connection.onInitialize(() => {
 connection.onCompletion(params => {
   const doc = documents.get(params.textDocument.uri);
   const text = doc ? doc.getText() : "";
-  const syms = collectSymbols(text);
+  const syms = collectSymbols(text, baseDir(params.textDocument.uri));
   const items = [];
   for (const kw of KEYWORDS) items.push({ label: kw, kind: CompletionItemKind.Keyword });
   for (const b of BUILTINS) items.push({ label: b, kind: CompletionItemKind.Function });
@@ -54,7 +55,7 @@ connection.onCompletion(params => {
 connection.onDocumentSymbol(params => {
   const doc = documents.get(params.textDocument.uri);
   const text = doc ? doc.getText() : "";
-  const syms = collectSymbols(text);
+  const syms = collectSymbols(text, baseDir(params.textDocument.uri));
   const symbols = [];
   for (const f of syms.functions) {
     symbols.push({ name: f, kind: 12, range: emptyRange(), selectionRange: emptyRange() });
@@ -67,6 +68,15 @@ connection.onDocumentSymbol(params => {
 
 function emptyRange() {
   return { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
+}
+
+function baseDir(uri) {
+  try {
+    const fsPath = uri.replace("file://", "");
+    return path.dirname(decodeURIComponent(fsPath));
+  } catch (e) {
+    return process.cwd();
+  }
 }
 
 documents.listen(connection);
