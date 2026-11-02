@@ -2,6 +2,7 @@ const { createConnection, TextDocuments, ProposedFeatures, TextDocumentSyncKind,
 const { TextDocument } = require("vscode-languageserver-textdocument");
 const { parse, collectSymbols } = require("./parser");
 const path = require("path");
+const fs = require("fs");
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -42,7 +43,20 @@ connection.onInitialize(() => {
 connection.onCompletion(params => {
   const doc = documents.get(params.textDocument.uri);
   const text = doc ? doc.getText() : "";
-  const syms = collectSymbols(text, baseDir(params.textDocument.uri));
+  const bd = baseDir(params.textDocument.uri);
+  const syms = collectSymbols(text, bd);
+  // include .kosh headers in the same directory
+  try {
+    for (const f of fs.readdirSync(bd)) {
+      if (!f.toLowerCase().endsWith(".kosh")) continue;
+      const full = path.join(bd, f);
+      const code = fs.readFileSync(full, "utf8");
+      const hs = collectSymbols(code, bd);
+      for (const x of hs.functions) syms.functions.push(x);
+      for (const x of hs.classes) syms.classes.push(x);
+      for (const x of hs.constants) syms.constants.push(x);
+    }
+  } catch (e) {}
   const items = [];
   for (const kw of KEYWORDS) items.push({ label: kw, kind: CompletionItemKind.Keyword });
   for (const b of BUILTINS) items.push({ label: b, kind: CompletionItemKind.Function });
