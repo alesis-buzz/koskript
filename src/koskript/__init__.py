@@ -55,6 +55,10 @@ class KoskriptRuntime(object):
         if globals_map:
             self.register_many(globals_map)
 
+        # expose `loadcode` to scripts: compiles a source string into a
+        # callable that runs it in this runtime
+        self.register("loadcode", self._loadcode_host)
+
     def register(self, name: str, value):
         """Expose a Python value or callable to scripts.
 
@@ -125,6 +129,25 @@ class KoskriptRuntime(object):
             del self._chunks[next(iter(self._chunks))]
         self._chunks[code] = chunk
         return chunk
+
+    def compile(self, code: str):
+        """Compile ``code`` once and return a callable that runs it.
+
+        The returned object can be called with no arguments; it executes the
+        already compiled chunk in this runtime.
+        """
+        chunk = self._chunk(code)
+
+        def run():
+            try:
+                return self.__interpreter__.run_chunk(chunk)
+            except ThrownSignal as signal:
+                raise self.__interpreter__._uncaught(signal) from None
+
+        return run
+
+    def _loadcode_host(self, code):
+        return self.compile(str(code))
 
     def execute_module(self, path: str):
         """Execute ``path`` as a Koskript module and return the module.
