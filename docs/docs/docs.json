@@ -18,6 +18,7 @@
       "pages": [
         { "type": "page", "name": "Language", "md_url": "language.md" },
         { "type": "page", "name": "Classes", "md_url": "classes.md" },
+        { "type": "page", "name": "Koskript Headers", "md_url": "kosh.md" },
         { "type": "page", "name": "Standard library", "md_url": "standard-library.md" },
         { "type": "page", "name": "Python interop", "md_url": "python-interop.md" }
       ]
