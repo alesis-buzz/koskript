@@ -529,3 +529,24 @@ let x = values.filter(
     (v) { return v > 0 },   // fine: the line starts a new argument
 )
 ```
+
+## Headers (`.kosh`)
+
+`.kosh` files are **editor/tooling headers only**. They are not part of the
+Koskript language runtime and are never executed by `KoskriptRuntime`. They
+exist to support IDE features such as autocompletion and diagnostics in the
+VSCode extension.
+
+A `.kosh` file uses a lightweight subset of the Koskript syntax:
+
+```koskript
+fun add(a, b)
+class Point {
+    public fun x()
+    public fun move(dx, dy)
+}
+const PI = 3.14
+```
+
+Function and method bodies are optional. The LSP scans `.kosh` files in the
+same directory as the `.kos` file being edited and exposes their symbols.
