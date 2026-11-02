@@ -1,22 +1,36 @@
 {
   "name": "koskript",
   "displayName": "Koskript",
-  "description": "Syntax highlighting for the Koskript language",
+  "description": "Koskript language support: syntax highlighting, diagnostics and autocompletion",
   "version": "1.5.0",
   "publisher": "alesis-buzz",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alesis-buzz/koskript"
+  },
   "main": "./client/extension.js",
   "activationEvents": [
     "onLanguage:koskript"
   ],
   "engines": {
-    "vscode": "^1.70.0"
+    "vscode": "^1.82.0"
   },
   "categories": [
     "Programming Languages"
   ],
+  "keywords": [
+    "koskript",
+    "kos",
+    "kosh"
+  ],
+  "scripts": {
+    "test": "node test-parser.js && node test-docs.js && node test-completions.js"
+  },
   "dependencies": {
     "vscode-languageclient": "^9.0.1",
-    "vscode-languageserver": "^9.0.1"
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.11"
   },
   "contributes": {
     "languages": [

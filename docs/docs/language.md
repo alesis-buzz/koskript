@@ -398,7 +398,7 @@ for (item in items) {
 ## Member Access
 
 ```koskript
-let user = { "name": "Aleix", "age": 17 }
+let user = { "name"= "Aleix", "age"= 17 }
 print(user.name)
 print(user.age)
 ```
@@ -426,7 +426,7 @@ let config = { "debug"= true }
 print(config["debug"]) // true
 
 // member access and indexing can be chained on the same line
-let data = { "nums": [1, 2, 3] }
+let data = { "nums"= [1, 2, 3] }
 print(data.nums[1])    // 2
 ```
 

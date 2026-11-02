@@ -2,7 +2,8 @@
   "name": "Koskript",
   "scopeName": "source.koskript",
   "fileTypes": [
-    "kos"
+    "kos",
+    "kosh"
   ],
   "patterns": [
     {
@@ -13,6 +14,9 @@
     },
     {
       "include": "#numbers"
+    },
+    {
+      "include": "#decorators"
     },
     {
       "include": "#keywords"
@@ -30,6 +34,14 @@
         {
           "name": "comment.line.double-slash.koskript",
           "match": "//.*$"
+        }
+      ]
+    },
+    "decorators": {
+      "patterns": [
+        {
+          "name": "entity.name.function.decorator.koskript",
+          "match": "@[A-Za-z_][A-Za-z0-9_]*"
         }
       ]
     },
@@ -87,7 +99,7 @@
         },
         {
           "name": "keyword.declaration.koskript",
-          "match": "\\b(let|const|fun|class|extends|namespace|error|import|as)\\b"
+          "match": "\\b(let|const|fun|class|extends|namespace|error|import|as|constructor)\\b"
         },
         {
           "name": "storage.modifier.koskript",
@@ -111,7 +123,7 @@
       "patterns": [
         {
           "name": "keyword.operator.koskript",
-          "match": "(==|!=|>=|<=|::|\\+|-|\\*|/|%|>|<|=)"
+          "match": "(==|!=|>=|<=|::|\\+|-|\\*|/|%|>|<|=|@)"
         }
       ]
     },
