@@ -151,9 +151,9 @@ class Parser(object):
     def parse_statement(self):
         kind = self._current().type
 
-        if kind == "local" or kind == "const":
+        if kind == "let" or kind == "const":
             return self.parse_declaration()
-        if kind == "fn" or kind == "wrapper":
+        if kind == "fun" or kind == "wrapper":
             return self.parse_function(implicit_return=kind == "wrapper")
         if kind == "@":
             return self.parse_decorated()
@@ -196,7 +196,7 @@ class Parser(object):
         name = self._expect("NAME", _NAMES).value
         self._expect("=", ("'='",))
         value = self.parse_expression()
-        if keyword == "local":
+        if keyword == "let":
             return LocalDecl(name=name, value=value)
         return ConstDecl(name=name, value=value)
 
@@ -328,13 +328,13 @@ class Parser(object):
     def parse_decorated(self):
         """A `fn` or `wrapper` preceded by one or more decorators."""
         decorators = self.parse_decorators()
-        if self._check("fn"):
+        if self._check("fun"):
             return self.parse_function(decorators=decorators)
         if self._check("wrapper"):
             return self.parse_function(implicit_return=True, decorators=decorators)
         self._error(self._current(),
-                    "A decorator must be followed by 'fn' or 'wrapper'.",
-                    ("'fn'", "'wrapper'"))
+                    "A decorator must be followed by 'fun' or 'wrapper'.",
+                    ("'fun'", "'wrapper'"))
 
     def parse_decorators(self) -> list:
         decorators = []
@@ -392,7 +392,7 @@ class Parser(object):
                 continue
 
             modifiers = self.parse_modifiers()
-            if self._check("fn"):
+            if self._check("fun"):
                 methods.append(self.parse_method(modifiers))
             elif self._check("constructor"):
                 constructors.append(self.parse_constructor(modifiers))
@@ -420,7 +420,7 @@ class Parser(object):
                           modifiers=modifiers)
 
     def parse_method(self, modifiers, decorators=None):
-        self._expect("fn", ("'fn'",))
+        self._expect("fun", ("'fun'",))
         name = self._expect("NAME", ("a method name",)).value
         params = self.parse_parameters()
         body = self.parse_block()
@@ -601,8 +601,20 @@ class Parser(object):
         return MapLit(value=entries)
 
     def parse_map_entry(self):
-        key = self.parse_expression()
-        self._expect(":", ("':'",))
+        token = self._current()
+        if token.type == "[":
+            self.pos += 1
+            key = self.parse_expression()
+            self._expect("]", ("']'",))
+        elif token.type == "NAME":
+            self.pos += 1
+            key = StrLit(value=token.value)
+        elif token.type == "STRING":
+            self.pos += 1
+            key = StrLit(value=token.value)
+        else:
+            self._error(token, expected=("a name", "a string", "'['"))
+        self._expect("=", ("'='",))
         return MapValue(key=key, value=self.parse_expression())
 
     def parse_group(self):

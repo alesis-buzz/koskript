@@ -8,81 +8,14 @@ from .lang.errors import Errors
 from .stdlib import build_globals
 import os
 
-_grammar_path = os.path.join(pathlib.Path(__file__).resolve().parent,
-                             "grammar.lark")
-
 
 def _wrap(value):
     return value if isinstance(value, KoskriptObject) else KoskriptObject(value=value)
 
 
-def _require_lark():
-    """Import Lark, with a message that points at the experimental parser."""
-    try:
-        from lark import Lark
-    except ImportError:
-        raise Errors.RuntimeError(
-            "the default parser needs the 'lark' package: install it, or pass "
-            "native_parser_experiment=True to use the native parser") from None
-    return Lark
-
-
-class _Grammar(object):
-    """The Lark grammar, with the LALR tables built on first use.
-
-    Building them takes about 200 ms, so it is deferred until a script is
-    actually parsed: runtimes created with ``native_parser_experiment=True``
-    never pay for them.
-    """
-
-    __slots__ = ("path", "parser")
-
-    def __init__(self, path):
-        self.path = path
-        self.parser = None
-
-    def parse(self, code: str):
-        """Parse ``code`` into a Lark tree."""
-        if self.parser is None:
-            with open(self.path, "r") as grammar_file:
-                from .lang.larklex import LineStartRetag
-                self.parser = _require_lark()(
-                    grammar_file.read(), parser="lalr",
-                    maybe_placeholders=False, postlex=LineStartRetag())
-        return self.parser.parse(code)
-
-
-grammar = _Grammar(_grammar_path)
-
 # How many compiled sources a runtime keeps. Running the same script again is
 # then free of parsing and compiling; the oldest entry is dropped past this.
 _CHUNK_CACHE = 32
-
-# Internal grammar terminals shown as the punctuation they stand for, so the
-# "Expected one of" line of a Lark error does not leak the `_LINE_*` names.
-_DISPLAY_NAMES = {"_LINE_LPAR": "'('", "_LINE_LSQB": "'['",
-                  "_LINE_DOT": "'.'", "_LINE_DCOLON": "'::'"}
-
-
-def _format_syntax_error(code: str, error) -> str:
-    from lark.exceptions import UnexpectedInput
-
-    if not isinstance(error, UnexpectedInput) or error.line is None:
-        return str(error)
-
-    lines = [f"Syntax error at line {error.line}, column {error.column}:", error.get_context(code).rstrip()]
-
-    token = getattr(error, "token", None)
-    if token is not None and token.type != "$END":
-        lines.append(f"Unexpected token '{token}'.")
-
-    expected = getattr(error, "expected", None)
-    if expected:
-        lines.append("Expected one of: " + ", ".join(sorted(
-            _DISPLAY_NAMES.get(name, name) for name in expected)))
-
-    return "\n".join(lines)
-
 
 class KoskriptRuntime(object):
     """Embeddable Koskript runtime.
@@ -94,14 +27,11 @@ class KoskriptRuntime(object):
     Any Python value or callable exposed to scripts is wrapped automatically,
     so you can pass plain functions without building ``KoskriptObject`` by hand.
 
-    Scripts are parsed with Lark, the default and stable front end, which
-    needs the ``lark`` package. ``native_parser_experiment=True`` switches to
-    the experimental pure Python scanner and parser instead: it needs no
-    dependency, starts faster and parses about 6x quicker, and it is what
-    will become the default once it has been validated in production.
+    Scripts are parsed with the native pure Python scanner and parser,
+    which needs no external dependency.
 
     >>> rt = KoskriptRuntime({"print": print})
-    >>> rt.execute("local x = 10\\nx + 26")
+    >>> rt.execute("let x = 10\\nx + 26")
     36
     """
 
@@ -113,39 +43,17 @@ class KoskriptRuntime(object):
         self.globals = {}
         self.native_parser_experiment = bool(native_parser_experiment)
         self.__interpreter__ = KoskriptInterpreter()
-        self._ast = None
         self.__interpreter__.module_loader = self._load_module
         self._modules = {}
         self._loading = []
         self._import_paths = []
         self._chunks = {}
 
-        if not self.native_parser_experiment:
-            # fail here instead of on the first script
-            _require_lark()
-
         if stdlib:
             self.register_many(build_globals(self.__interpreter__.call_value))
 
         if globals_map:
             self.register_many(globals_map)
-
-    @property
-    def __ast__(self):
-        """The Lark AST transformer, created the first time it is needed.
-
-        It lives in :mod:`koskript.lang.astgen`, which imports Lark, so
-        runtimes using the native parser never load it.
-        """
-        transformer = self._ast
-        if transformer is None:
-            from .lang.astgen import KoskriptTransformer
-            transformer = self._ast = KoskriptTransformer()
-        return transformer
-
-    @__ast__.setter
-    def __ast__(self, transformer):
-        self._ast = transformer
 
     def register(self, name: str, value):
         """Expose a Python value or callable to scripts.
@@ -232,31 +140,9 @@ class KoskriptRuntime(object):
         except ThrownSignal as signal:
             raise self.__interpreter__._uncaught(signal) from None
 
-    def _transform(self, tree):
-        """Run the AST transformer, unwrapping clean syntax errors."""
-        from lark.exceptions import VisitError
-
-        transformer = self.__ast__
-        try:
-            return transformer.transform(tree)
-        except VisitError as e:
-            if isinstance(e.orig_exc, Errors.SyntaxError):
-                raise e.orig_exc from None
-            raise
-
     def _compile(self, code: str):
         """Parse ``code`` into the list of statements the compiler consumes."""
-        if self.native_parser_experiment:
-            return parse(code)
-
-        from lark.exceptions import LarkError
-
-        try:
-            tree = grammar.parse(code)
-        except LarkError as e:
-            raise Errors.SyntaxError(_format_syntax_error(code, e)) from e
-        ast = self._transform(tree)
-
+        ast = parse(code)
         if not isinstance(ast, list):
             ast = [ast]
         return ast

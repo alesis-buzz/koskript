@@ -27,7 +27,7 @@ error NotFound (err, key) {
 }
 
 error ValidationFailed (err, field, reason) {
-    err.message = "invalid " + field + ": " + reason
+    err.message = "invalid " + field + "= " + reason
     err.field = field
     err.reason = reason
 }
@@ -46,23 +46,23 @@ wrapper counted (target) {
 }
 
 @with_prefix
-fn header (text) {
+fun header (text) {
     return string.upper(text)
 }
 
 @with_prefix
 @counted
-fn section (text) {
+fun section (text) {
     return string.upper(text)
 }
 
 // ── Number helpers ─────────────────────────────────────────────────────────
 
-fn is_prime (n) {
+fun is_prime (n) {
     if (n < 2) { return false }
     if (n < 4) { return true }
     if (n % 2 == 0) { return false }
-    local i = 3
+    let i = 3
     while (i * i <= n) {
         if (n % i == 0) { return false }
         i = i + 2
@@ -70,7 +70,7 @@ fn is_prime (n) {
     return true
 }
 
-fn primes_below (limit) {
+fun primes_below (limit) {
     const found = []
     for (n in range(2, limit)) {
         if (is_prime(n)) { array.push(found, n) }
@@ -78,20 +78,20 @@ fn primes_below (limit) {
     return found
 }
 
-fn fib (n) {
+fun fib (n) {
     if (n < 2) { return n }
     return fib(n - 1) + fib(n - 2)
 }
 
-fn factorial (n) {
+fun factorial (n) {
     if (n <= 1) { return 1 }
     return n * factorial(n - 1)
 }
 
-fn gcd (a, b) {
+fun gcd (a, b) {
     // parameters are read only, so the loop keeps its own copies
-    local x = a
-    local y = b
+    let x = a
+    let y = b
     while (y != 0) {
         const t = y
         y = x % y
@@ -100,95 +100,95 @@ fn gcd (a, b) {
     return x
 }
 
-fn clamp_mark (value) {
+fun clamp_mark (value) {
     if (value < 0) { return 0.0 }
     if (value > 10) { return 10.0 }
     return value
 }
 
-fn mean (values) {
+fun mean (values) {
     if (len(values) == 0) { return 0.0 }
     const total = array.reduce(values, (acc, v) { return acc + v }, 0.0)
     return total / len(values)
 }
 
-fn stdev (values) {
+fun stdev (values) {
     const m = mean(values)
     const squares = array.map(values, (v) { return (v - m) * (v - m) })
     return math.sqrt(mean(squares))
 }
 
-fn highest (values) {
+fun highest (values) {
     return array.reduce(values, (a, b) {
         if (a > b) { return a }
         return b
     }, 0.0)
 }
 
-fn lowest (values) {
+fun lowest (values) {
     return array.reduce(values, (a, b) {
         if (a < b) { return a }
         return b
     }, 10.0)
 }
 
-fn capitalise (name) {
+fun capitalise (name) {
     return string.upper(string.slice(name, 0, 1)) + string.slice(name, 1)
 }
 
 // ── String helpers ─────────────────────────────────────────────────────────
 
-fn initials (name) {
+fun initials (name) {
     const parts = string.split(name, " ")
-    local out = ""
+    let out = ""
     for (part in parts) {
         if (part != "") { out = out + string.slice(part, 0, 1) + "." }
     }
     return out
 }
 
-fn pad_label (text, width) {
+fun pad_label (text, width) {
     if (len(text) >= width) { return text }
     return text + string.repeat(" ", width - len(text))
 }
 
-fn normalise (text) {
+fun normalise (text) {
     return string.trim(string.lower(string.replace(text, "_", " ")))
 }
 
-fn join_nonempty (parts, separator) {
+fun join_nonempty (parts, separator) {
     const kept = array.filter(parts, (p) { return p != "" })
     return array.join(kept, separator)
 }
 
-fn csv_row (values) {
+fun csv_row (values) {
     return array.join(array.map(values, str), ",")
 }
 
 // ── Validation and error handling ──────────────────────────────────────────
 
-fn validate_mark (mark) {
+fun validate_mark (mark) {
     if (mark < 0 or mark > 10) { throw OutOfRange(mark) }
     if (mark == 0) { throw ValidationFailed("mark", "a zero is not allowed") }
     return mark
 }
 
-fn safe_mark (mark) {
+fun safe_mark (mark) {
     try {
         return validate_mark(mark)
     } catch failure {
-        print("  ! rejected " + str(mark) + ": " + failure.message)
+        print("  ! rejected " + str(mark) + "= " + failure.message)
         return null
     } finally {
         // finally always runs, even when the body throws
     }
 }
 
-fn describe_error (fn_to_call) {
+fun describe_error (fn_to_call) {
     try {
         return fn_to_call()
     } catch failure {
-        return failure.name + ": " + failure.message
+        return failure.name + "= " + failure.message
     }
 }
 
@@ -205,18 +205,18 @@ class Person {
         this.secret = "id-" + string.lower(name)
     }
 
-    public fn describe () {
+    public fun describe () {
         return this.name + " (" + str(this.age) + ")"
     }
 
-    public fn older_than (age) {
+    public fun older_than (age) {
         return this.age > age
     }
 
-    static fn of_age (people, age) {
+    static fun of_age (people, age) {
         const found = []
         for (person in people) {
-            if (person.older_than(age)) { array.push(found, person) }
+            if (person::older_than(age)) { array.push(found, person) }
         }
         return found
     }
@@ -232,30 +232,30 @@ class Student extends Person {
         this.marks = []
     }
 
-    public fn add_mark (mark) {
+    public fun add_mark (mark) {
         const clean = clamp_mark(mark)
         array.push(this.marks, clean)
         return clean
     }
 
-    public fn average_mark () {
+    public fun average_mark () {
         return mean(this.marks)
     }
 
-    public fn passed () {
+    public fun passed () {
         if (len(this.marks) == 0) { return false }
-        return this.average_mark() >= PASS_MARK
+        return this::average_mark() >= PASS_MARK
     }
 
-    public fn describe () {
+    public fun describe () {
         return super::describe() + " [" + this.course + "]"
     }
 
-    public fn report () {
-        local line = this.describe()
-        line = line + " media=" + str(this.average_mark())
+    public fun report () {
+        let line = this::describe()
+        line = line + " media=" + str(this::average_mark())
         line = line + " (" + str(len(this.marks)) + " notas)"
-        if (this.passed()) { return line + " APTO" }
+        if (this::passed()) { return line + " APTO" }
         return line + " NO APTO"
     }
 }
@@ -270,31 +270,31 @@ class Teacher extends Person {
         this.students = []
     }
 
-    public fn enrol (student) {
+    public fun enrol (student) {
         array.push(this.students, student)
         return this
     }
 
-    public fn average_of_class () {
-        const marks = array.map(this.students, (s) { return s.average_mark() })
+    public fun average_of_class () {
+        const marks = array.map(this.students, (s) { return s::average_mark() })
         return mean(marks)
     }
 
-    public fn best_student () {
-        local best = null
+    public fun best_student () {
+        let best = null
         for (student in this.students) {
             if (best == null) {
                 best = student
                 continue
             }
-            if (student.average_mark() > best.average_mark()) { best = student }
+            if (student::average_mark() > best::average_mark()) { best = student }
         }
         return best
     }
 
-    static fn summary (teachers) {
-        local total = 0.0
-        for (teacher in teachers) { total = total + teacher.average_of_class() }
+    static fun summary (teachers) {
+        let total = 0.0
+        for (teacher in teachers) { total = total + teacher::average_of_class() }
         return total
     }
 }
@@ -308,32 +308,32 @@ class Registry {
         this.count = 0
     }
 
-    public fn add (key, value) {
+    public fun add (key, value) {
         // note: index assignment (`this.items[key] = value`) is not part of
         // the language yet, so the map namespace does the writing
-        map.merge(this.items, { key: value })
+        map.merge(this.items, { [key]=value })
         this.count = this.count + 1
         return this
     }
 
-    public fn get (key) {
+    public fun get (key) {
         if (map.has(this.items, key)) { return this.items[key] }
         throw NotFound(key)
     }
 
-    public fn find (key) {
+    public fun find (key) {
         try {
-            return this.get(key)
+            return this::get(key)
         } catch failure {
             return null
         }
     }
 
-    public fn size () {
+    public fun size () {
         return this.count
     }
 
-    public fn keys () {
+    public fun keys () {
         return map.keys(this.items)
     }
 }
@@ -343,52 +343,52 @@ class Registry {
 namespace Report {
     const INDENT = "  "
 
-    fn line (text) {
+    fun line (text) {
         return INDENT + text
     }
 
-    fn heading (text) {
+    fun heading (text) {
         return string.upper(INDENT + text)
     }
 
-    fn rule () {
+    fun rule () {
         return INDENT + string.repeat("=", 30)
     }
 
-    fn kv (key, value) {
-        return line(pad_label(key, 14) + ": " + str(value))
+    fun kv (key, value) {
+        return line(pad_label(key, 14) + "= " + str(value))
     }
 
     namespace Math2 {
-        fn square (x) { return x * x }
-        fn cube (x) { return x * x * x }
-        fn sqrt2 (x) { return math.sqrt(x) }
-        fn hypot (a, b) { return Report.Math2.sqrt2(a * a + b * b) }
+        fun square (x) { return x * x }
+        fun cube (x) { return x * x * x }
+        fun sqrt2 (x) { return math.sqrt(x) }
+        fun hypot (a, b) { return Report.Math2.sqrt2(a * a + b * b) }
     }
 }
 
 namespace Data {
     const STUDENTS = {
-        "ana":   { "age": 17, "course": "4A", "marks": [9.5, 8.0, 7.25] },
-        "bruno": { "age": 16, "course": "4B", "marks": [4.0, 6.5, 5.5] },
-        "carla": { "age": 17, "course": "4A", "marks": [10.0, 9.25, 8.75] },
-        "diego": { "age": 18, "course": "4C", "marks": [3.25, 4.5, 6.0] },
-        "eva":   { "age": 16, "course": "4B", "marks": [7.0, 7.75, 8.5] }
+        "ana"=   { "age"= 17, "course"= "4A", "marks"= [9.5, 8.0, 7.25] },
+        "bruno"= { "age"= 16, "course"= "4B", "marks"= [4.0, 6.5, 5.5] },
+        "carla"= { "age"= 17, "course"= "4A", "marks"= [10.0, 9.25, 8.75] },
+        "diego"= { "age"= 18, "course"= "4C", "marks"= [3.25, 4.5, 6.0] },
+        "eva"=   { "age"= 16, "course"= "4B", "marks"= [7.0, 7.75, 8.5] }
     }
 
-    fn names () {
+    fun names () {
         return map.keys(Data.STUDENTS)
     }
 
-    fn course_of (name) {
+    fun course_of (name) {
         return Data.STUDENTS[name]["course"]
     }
 
-    fn marks_of (name) {
+    fun marks_of (name) {
         return Data.STUDENTS[name]["marks"]
     }
 
-    fn students_of (course) {
+    fun students_of (course) {
         const found = []
         foreach (name, data in Data.STUDENTS) {
             if (data["course"] == course) { array.push(found, name) }
@@ -396,7 +396,7 @@ namespace Data {
         return found
     }
 
-    fn all_marks () {
+    fun all_marks () {
         const marks = []
         foreach (name, data in Data.STUDENTS) {
             for (mark in data["marks"]) { array.push(marks, mark) }
@@ -407,15 +407,15 @@ namespace Data {
 
 // ── Closures ───────────────────────────────────────────────────────────────
 
-fn make_counter (start) {
-    local n = start
+fun make_counter (start) {
+    let n = start
     return () {
         n = n + 1
         return n
     }
 }
 
-fn make_accumulator () {
+fun make_accumulator () {
     const total = []
     return (value) {
         array.push(total, value)
@@ -439,20 +439,20 @@ print(Report.rule())
 const registry = new Registry()
 foreach (name, data in Data.STUDENTS) {
     const student = new Student(capitalise(name), data["age"], data["course"])
-    for (mark in data["marks"]) { student.add_mark(mark) }
-    registry.add(name, student)
+    for (mark in data["marks"]) { student::add_mark(mark) }
+    registry::add(name, student)
 }
-print(Report.kv("registrados", registry.size()))
-print(Report.kv("claves", array.join(array.sort(registry.keys()), ", ")))
+print(Report.kv("registrados", registry::size()))
+print(Report.kv("claves", array.join(array.sort(registry::keys()), ", ")))
 
 // Per student report
 print(Report.rule())
 print(Report.heading("informe por alumno"))
 const next_id = make_counter(0)
 foreach (name, data in Data.STUDENTS) {
-    const student = registry.get(name)
-    const average_mark = student.average_mark()
-    print(Report.line(student.report()))
+    const student = registry::get(name)
+    const average_mark = student::average_mark()
+    print(Report.line(student::report()))
     print(Report.line("  #" + str(next_id()) + " " + initials(name)
                       + " desv=" + str(stdev(student.marks))))
     if (average_mark >= PASS_MARK) {
@@ -470,9 +470,9 @@ print(Report.heading("profesores"))
 const teachers = []
 for (subject in SUBJECTS) {
     const teacher = new Teacher("prof. " + string.slice(subject, 0, 3), 40, subject)
-    for (name in Data.students_of("4A")) { teacher.enrol(registry.get(name)) }
+    for (name in Data.students_of("4A")) { teacher::enrol(registry::get(name)) }
     array.push(teachers, teacher)
-    print(Report.kv(subject, teacher.average_of_class()))
+    print(Report.kv(subject, teacher::average_of_class()))
 }
 print(Report.kv("promedio global", Teacher.summary(teachers)))
 
@@ -512,9 +512,9 @@ print(Report.kv("palabras", len(words)))
 const counts = {}
 for (word in words) {
     if (map.has(counts, word)) {
-        map.merge(counts, { word: counts[word] + 1 })
+        map.merge(counts, { [word]=counts[word] + 1 })
     } else {
-        map.merge(counts, { word: 1 })
+        map.merge(counts, { [word]=1 })
     }
 }
 const top = array.sort_by(map.keys(counts), (key) { return -counts[key] })
@@ -534,15 +534,15 @@ for (mark in candidates) {
 }
 print(Report.kv("aceptadas", array.join(array.map(accepted, str), " ")))
 print(Report.kv("descartadas", len(candidates) - len(accepted)))
-print(Report.kv("missing es null", registry.find("nobody") == null))
-print(Report.kv("error capturado", describe_error(() { registry.get("nada") })))
+print(Report.kv("missing es null", registry::find("nobody") == null))
+print(Report.kv("error capturado", describe_error(() { registry::get("nada") })))
 print(Report.kv("error validado", describe_error(() { validate_mark(0) })))
 print(Report.kv("sin error", describe_error(() { return 42 })))
 
 // Nested loops with break and continue
 print(Report.rule())
 print(Report.heading("bucles anidados"))
-local total = 0
+let total = 0
 for (i in range(1, 15)) {
     if (i % 2 == 0) { continue }
     for (j in range(1, 15)) {
@@ -553,7 +553,7 @@ for (i in range(1, 15)) {
 }
 print(Report.kv("total", total))
 
-local countdown = 10
+let countdown = 10
 while (countdown > 0) {
     countdown = countdown - 1
     if (countdown == 4) { continue }
@@ -569,7 +569,7 @@ print(Report.kv("len", len(payload)))
 print(Report.kv("hex", bytes.hex(payload)))
 print(Report.kv("primer byte", payload[0]))
 print(Report.kv("texto", bytes.to_string(bytes.slice(payload, 3, 10))))
-print(Report.kv("json", json.encode({ "alumnos": len(Data.names()), "apto": true })))
+print(Report.kv("json", json.encode({ "alumnos"= len(Data.names()), "apto"= true })))
 const decoded = json.decode("{\"apto\": true, \"nota\": 9.5}")
 print(Report.kv("decodificado", decoded["nota"]))
 
@@ -596,18 +596,18 @@ const people = [
     new Student("Linus", 17, "4A"),
     new Teacher("Grace", 45, "informatica")
 ]
-for (person in people) { print(Report.line(person.describe())) }
+for (person in people) { print(Report.line(person::describe())) }
 print(Report.kv("mayores de 17", len(Person.of_age(people, 17))))
-print(Report.kv("mejor alumno", teachers[0].best_student().name))
+print(Report.kv("mejor alumno", teachers[0]::best_student().name))
 
 // A heavier loop, so the run time is worth measuring
 print(Report.rule())
 print(Report.heading("carga"))
 const counter = make_accumulator()
-local checksum = 0
-local rounds = 0
+let checksum = 0
+let rounds = 0
 for (round in range(200)) {
-    const student = registry.get(Data.names()[round % 5])
+    const student = registry::get(Data.names()[round % 5])
     for (mark in student.marks) {
         checksum = checksum + round + mark
     }

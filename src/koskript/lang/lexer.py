@@ -26,8 +26,8 @@ from bisect import bisect_right
 
 # Words reserved by the language: they can never be used as identifiers.
 RESERVED_WORDS = frozenset((
-    "if", "elseif", "else", "while", "for", "foreach", "fn", "wrapper",
-    "return", "local", "const", "true", "false", "null", "and", "or", "not",
+    "if", "elseif", "else", "while", "for", "foreach", "fun", "wrapper",
+    "return", "let", "const", "true", "false", "null", "and", "or", "not",
     "in", "break", "continue", "class", "extends", "new", "static", "public",
     "private", "this", "super", "constructor", "import", "as", "error",
     "throw", "try", "catch", "finally", "namespace",

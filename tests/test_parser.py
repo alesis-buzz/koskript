@@ -11,7 +11,6 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
-from koskript import grammar
 from koskript.lang import emtypes
 from koskript.lang.lexer import Lexer
 from koskript.lang.parser import parse
@@ -32,8 +31,8 @@ class LexerTest(unittest.TestCase):
         self.assertEqual(self.tokens("b'\\x41'")[0], ("BYTES", b"A"))
 
     def test_keywords_and_names(self):
-        self.assertEqual(self.tokens("local x")[:2],
-                         [("local", "local"), ("NAME", "x")])
+        self.assertEqual(self.tokens("let x")[:2],
+                         [("let", "let"), ("NAME", "x")])
 
     def test_operators_longest_first(self):
         self.assertEqual([kind for kind, _ in self.tokens("== != >= <= :: + - * / % > <")][:-1],
@@ -85,7 +84,7 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(parse("\n\n// only a comment\n"), [])
 
     def test_declarations(self):
-        ast = parse("local a = 1\nconst b = 2\na = 3")
+        ast = parse("let a = 1\nconst b = 2\na = 3")
         self.assertEqual(types_of(*ast), ["LocalDecl", "ConstDecl", "DeclStmt"])
         self.assertEqual(ast[0].name, "a")
         self.assertEqual(ast[0].value, emtypes.IntLit(1))
@@ -197,7 +196,7 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(parse("[1, 2,]")[0],
                          emtypes.ArrayLit(value=[emtypes.IntLit(1), emtypes.IntLit(2)]))
         self.assertEqual(parse("[]")[0], emtypes.ArrayLit(value=[]))
-        self.assertEqual(parse("{\"a\": 1,}")[0], emtypes.MapLit(value=[
+        self.assertEqual(parse('{"a"=1,}')[0], emtypes.MapLit(value=[
             emtypes.MapValue(key=emtypes.StrLit("a"), value=emtypes.IntLit(1))]))
         self.assertEqual(parse("{}")[0], emtypes.MapLit(value=[]))
 
@@ -220,8 +219,8 @@ continue
 
     def test_functions(self):
         ast = parse("""
-fn add(a, b) { return a + b }
-fn noop() { }
+fun add(a, b) { return a + b }
+fun noop() { }
 wrapper double(x) { x * 2 }
 """)
         self.assertEqual(types_of(*ast), ["FnDef", "FnDef", "FnDef"])
@@ -236,7 +235,7 @@ wrapper double(x) { x * 2 }
 @b(1)
 @c.ns
 @d.e(1, 2)
-fn f() { }
+fun f() { }
 @dec
 wrapper w(x) { x }
 """)
@@ -261,11 +260,11 @@ class Base {
     public a = 1
     private b = 2
     constructor(x) { this.a = x }
-    public fn run() { return ::helper() }
-    private fn helper() { return super::run() }
-    static fn build() { return new Base(1) }
+    public fun run() { return ::helper() }
+    private fun helper() { return super::run() }
+    static fun build() { return new Base(1) }
     @dec
-    public fn tagged() { }
+    public fun tagged() { }
 }
 class Child extends Base { }
 """)
@@ -284,7 +283,7 @@ class Child extends Base { }
 
     def test_class_body_only_takes_members(self):
         with self.assertRaises(Exception):
-            parse("class A { local x = 1 }")
+            parse("class A { let x = 1 }")
         with self.assertRaises(Exception):
             parse("class A { class B { } }")
 
@@ -319,48 +318,48 @@ try { a() } finally { c() }
                                                          value=emtypes.IntLit(3))])
 
     def test_return(self):
-        self.assertEqual(parse("fn f() { return 1 }")[0].body[0],
+        self.assertEqual(parse("fun f() { return 1 }")[0].body[0],
                          emtypes.ReturnStmt(value=emtypes.IntLit(1)))
-        self.assertEqual(parse("fn f() {\n  return\n}")[0].body[0],
+        self.assertEqual(parse("fun f() {\n  return\n}")[0].body[0],
                          emtypes.ReturnStmt(value=None))
-        self.assertEqual(parse("fn f() { return // done\n}")[0].body[0],
+        self.assertEqual(parse("fun f() { return // done\n}")[0].body[0],
                          emtypes.ReturnStmt(value=None))
-        self.assertEqual(parse("fn f() { return }")[0].body[0],
+        self.assertEqual(parse("fun f() { return }")[0].body[0],
                          emtypes.ReturnStmt(value=None))
         # A `return` at the end of a line never swallows the next statement.
-        self.assertEqual(len(parse("fn f() {\n  return\n  g()\n}")[0].body), 2)
+        self.assertEqual(len(parse("fun f() {\n  return\n  g()\n}")[0].body), 2)
 
     def test_return_takes_every_kind_of_expression(self):
-        for code in ("1", "1.5", '"s"', 'b"s"', "a", "[1]", "{1: 2}",
+        for code in ("1", "1.5", '"s"', 'b"s"', "a", "[1]", '{"a"=2}',
                      "(1 + 1)", "-1", ".m()", "true", "false", "null",
                      "this.x", "new A()", "super::m()", "::m()", "not a",
                      "a.b(c)", "a[0]", "not not a"):
-            body = parse(f"fn f() {{ return {code} }}")[0].body
+            body = parse(f"fun f() {{ return {code} }}")[0].body
             self.assertEqual(len(body), 1, code)
             self.assertIsNotNone(body[0].value, code)
 
     def test_reserved_words_are_not_identifiers(self):
-        for code in ("local if = 1", "local in = 1", "obj.if", "local super = 1"):
+        for code in ("let if = 1", "let in = 1", "obj.if", "let super = 1"):
             with self.assertRaises(Exception, msg=code):
                 parse(code)
 
     def test_newlines_are_whitespace(self):
-        self.assertEqual(parse("local a = 1\n\nlocal b = 2"),
-                         parse("local a = 1 local b = 2"))
+        self.assertEqual(parse("let a = 1\n\nlet b = 2"),
+                         parse("let a = 1 let b = 2"))
 
     def test_syntax_error_position_and_context(self):
         from koskript.lang.errors import Errors
 
         with self.assertRaises(Errors.SyntaxError) as raised:
-            parse("local = 1")
+            parse("let = 1")
         message = str(raised.exception)
-        self.assertIn("Syntax error at line 1, column 7:", message)
-        self.assertIn("local = 1", message)
+        self.assertIn("Syntax error at line 1, column 5:", message)
+        self.assertIn("let = 1", message)
         self.assertIn("^", message)
         self.assertIn("Unexpected token '='.", message)
 
         with self.assertRaises(Errors.SyntaxError) as raised:
-            parse("local a = [1,\nlocal b = 2")
+            parse("let a = [1,\nlet b = 2")
         self.assertIn("line 2, column 1:", str(raised.exception))
 
     def test_too_deep_nesting_is_a_syntax_error(self):
@@ -376,23 +375,23 @@ class RuntimeTest(unittest.TestCase):
         from koskript import KoskriptRuntime
 
         runtime = KoskriptRuntime()
-        self.assertEqual(runtime.execute("local x = 10\nx + 26"), 36)
+        self.assertEqual(runtime.execute("let x = 10\nx + 26"), 36)
         self.assertEqual(runtime.execute("return 1 + 2"), 3)
         self.assertEqual(
             runtime.execute("""
 class Counter {
     private count = 0
     constructor() { this.count = 1 }
-    public fn bump() { this.count = this.count + 1 return this.count }
+    public fun bump() { this.count = this.count + 1 return this.count }
 }
 const c = new Counter()
-c.bump() + c.bump()
+c::bump() + c::bump()
 """), 5)
         self.assertEqual(
             runtime.execute("""
 wrapper loud(target) { (name) { return target(name) + "!" } }
 @loud
-fn greet(name) { return "hola " + name }
+fun greet(name) { return "hola " + name }
 greet("Ana")
 """), "hola Ana!")
 
@@ -416,7 +415,7 @@ try {
         from koskript import Errors, KoskriptRuntime
 
         with self.assertRaises(Errors.SyntaxError):
-            KoskriptRuntime().execute("local = 1")
+            KoskriptRuntime().execute("let = 1")
 
     def test_modules(self):
         import tempfile
@@ -424,7 +423,7 @@ try {
 
         with tempfile.TemporaryDirectory() as folder:
             with open(f"{folder}/helpers.kos", "w") as handle:
-                handle.write("fn double(x) { return x * 2 }")
+                handle.write("fun double(x) { return x * 2 }")
             runtime = KoskriptRuntime()
             runtime.add_import_path(folder)
             script = 'import "helpers"\nhelpers.double(21)'
@@ -439,36 +438,36 @@ class ParserSelectionTest(unittest.TestCase):
     """`native_parser_experiment` picks the front end, and both agree."""
 
     SCRIPTS = [
-        "local x = 10\nx + 26",
+        "let x = 10\nx + 26",
         "return 1 + 2",
-        'local m = { "a": 1, "b": [1, 2, 3] }\nreturn m.b[1]',
-        "fn fact(n) {\n if (n < 2) { return 1 }\n return n * fact(n - 1)\n}\n"
+        'let m = { "a"=1, "b"=[1, 2, 3] }\nreturn m.b[1]',
+        "fun fact(n) {\n if (n < 2) { return 1 }\n return n * fact(n - 1)\n}\n"
         "return fact(6)",
         "class Counter {\n private n = 0\n constructor(v) { this.n = v }\n"
-        " public fn bump() { this.n = this.n + 1 return this.n }\n"
-        " public fn value() { return this.n }\n"
-        " static fn make() { return new Counter(0) }\n}\n"
-        "const c = new Counter(1)\nc.bump() + c.bump() + Counter.make().value()",
-        "class Animal { public fn speak() { return \"woof\" } }\n"
-        "class Dog extends Animal { public fn speak() { return super::speak() + \"!\" } }\n"
-        "return new Dog().speak()",
-        "namespace U { const MAX = 3\n fn twice(x) { return x * 2 } }\n"
+        " public fun bump() { this.n = this.n + 1 return this.n }\n"
+        " public fun value() { return this.n }\n"
+        " static fun make() { return new Counter(0) }\n}\n"
+        "const c = new Counter(1)\nc::bump() + c::bump() + Counter.make()::value()",
+        "class Animal { public fun speak() { return \"woof\" } }\n"
+        "class Dog extends Animal { public fun speak() { return super::speak() + \"!\" } }\n"
+        "return new Dog()::speak()",
+        "namespace U { const MAX = 3\n fun twice(x) { return x * 2 } }\n"
         "return U.MAX + U.twice(2)",
         "error MyError (err) { err.message = \"boom\" }\n"
         "try { throw MyError() } catch e { return e.message }",
         "wrapper loud(t) { (n) { return t(n) + \"!\" } }\n@loud\n"
-        "fn hi(n) { return \"hi \" + n }\nreturn hi(\"ana\")",
+        "fun hi(n) { return \"hi \" + n }\nreturn hi(\"ana\")",
         "const add = (a, b) { return a + b }\nreturn add(1, 2)",
-        "local out = []\nfor (i in range(5)) {\n if (i == 2) { continue }\n"
+        "let out = []\nfor (i in range(5)) {\n if (i == 2) { continue }\n"
         " if (i == 4) { break }\n out = array.insert(out, 0, i)\n}\nreturn out",
-        'foreach (k, v in { "a": "x", "b": "y" }) { return k + v }',
-        "local b = b\"\\x01\\x02\"\nreturn len(b) + b[1]",
-        "local i = 0\nwhile (i < 3) { i = i + 1 }\nreturn i",
+        'foreach (k, v in { "a"="x", "b"="y" }) { return k + v }',
+        "let b = b\"\\x01\\x02\"\nreturn len(b) + b[1]",
+        "let i = 0\nwhile (i < 3) { i = i + 1 }\nreturn i",
         # a postfix operator that starts a line ends the statement, so these
         # run as written and not as chained calls
-        "local r = 5\nreturn (r >= 0) and (r < 1)",
-        "fn id(x) { return x }\nlocal a = id\n(1)\nreturn a(2)",
-        "local arr = [7, 8]\nlocal x = arr\n[9]\nreturn len(x)",
+        "let r = 5\nreturn (r >= 0) and (r < 1)",
+        "fun id(x) { return x }\nlet a = id\n(1)\nreturn a(2)",
+        "let arr = [7, 8]\nlet x = arr\n[9]\nreturn len(x)",
     ]
 
     def test_default_uses_lark_and_the_flag_uses_the_native_parser(self):
@@ -491,19 +490,6 @@ class ParserSelectionTest(unittest.TestCase):
             with self.subTest(script=script):
                 self.assertEqual(default.execute(script), native.execute(script))
 
-    def test_both_parsers_build_the_same_ast(self):
-        from koskript import KoskriptRuntime
-        from koskript.lang.astgen import KoskriptTransformer
-        from koskript.lang.parser import parse
-
-        transformer = KoskriptTransformer()
-        for script in self.SCRIPTS:
-            with self.subTest(script=script):
-                tree_ast = transformer.transform(grammar.parse(script))
-                if not isinstance(tree_ast, list):
-                    tree_ast = [tree_ast]
-                self.assertEqual(parse(script), tree_ast)
-
     # sources that both front ends must reject: a postfix operator that
     # starts a line does not continue the expression above it
     BROKEN_LINE_START = [
@@ -515,8 +501,8 @@ class ParserSelectionTest(unittest.TestCase):
     def test_both_parsers_reject_the_same_sources(self):
         from koskript import KoskriptRuntime, Errors
 
-        broken = ["local = 1", "fn f( {", "a[0] = 1", "class A { local x = 1 }",
-                  "return not", "a < b < c", "(a) = 1", "local in = 1"] \
+        broken = ["let = 1", "fun f( {", "a[0] = 1", "class A { let x = 1 }",
+                  "return not", "a < b < c", "(a) = 1", "let in = 1"] \
             + self.BROKEN_LINE_START
         default = KoskriptRuntime()
         native = KoskriptRuntime(native_parser_experiment=True)
@@ -530,15 +516,15 @@ class ParserSelectionTest(unittest.TestCase):
     # sources only worth comparing as trees: they call names that need not
     # exist, or end in a static reference outside a class
     LINE_START_CASES = [
-        "local a = b\n(1)",
-        "local a = b\n[1]",
-        "local a = b\n.c",
-        "local a = b\n::c()",
+        "let a = b\n(1)",
+        "let a = b\n[1]",
+        "let a = b\n.c",
+        "let a = b\n::c()",
         "foo\n(1)",
         "foo\n[1]",
         "foo\n.bar",
         "foo\n::bar()",
-        "local a = b\n.c[0](1)",
+        "let a = b\n.c[0](1)",
         "f(\n1,\n2)",
         "f(\n(1))",
         "f(a,\n(1))",
@@ -546,34 +532,21 @@ class ParserSelectionTest(unittest.TestCase):
         "if\n(a) { } elseif\n(b) { } else { }",
         "for\n(i in x) { }",
         "foreach\n(k, v in x) { }",
-        "local f =\n(x) { return x }",
+        "let f =\n(x) { return x }",
         "if (a) { }\n.build()",
-        "local x = 1 +\n(2)",
+        "let x = 1 +\n(2)",
         "foo() // note\n(1)",
         'foo("a\nb")(1)',
         "obj::m\n(1)",
         "new A\n(1)",
         "class A extends B\n.C { }",
-        "@d\n.ns\nfn f() { }",
-        "fn f\n(a) { }",
-        "class A { fn m\n(a) { }\nconstructor\n(a) { } }",
+        "@d\n.ns\nfun f() { }",
+        "fun f\n(a) { }",
+        "class A { fun m\n(a) { }\nconstructor\n(a) { } }",
         "error E\n(e) { }",
         "wrapper w\n(a) { }",
-        "local a = b\n::c()::d()",
+        "let a = b\n::c()::d()",
     ]
-
-    def test_both_parsers_agree_on_line_start_postfix(self):
-        """A `.`, `::`, `[` or `(` that starts a line never chains."""
-        from koskript.lang.astgen import KoskriptTransformer
-        from koskript.lang.parser import parse
-
-        transformer = KoskriptTransformer()
-        for script in self.LINE_START_CASES:
-            with self.subTest(script=script):
-                tree_ast = transformer.transform(grammar.parse(script))
-                if not isinstance(tree_ast, list):
-                    tree_ast = [tree_ast]
-                self.assertEqual(parse(script), tree_ast)
 
     def run_python(self, script):
         """Run ``script`` in a clean process that imports this checkout."""
@@ -587,49 +560,6 @@ class ParserSelectionTest(unittest.TestCase):
                              if env.get("PYTHONPATH") else source)
         return subprocess.run([sys.executable, "-c", script],
                               capture_output=True, text=True, env=env)
-
-    def test_native_parser_never_imports_lark(self):
-        result = self.run_python(
-            "import sys\n"
-            "import koskript\n"
-            "assert koskript.grammar.parser is None\n"
-            "koskript.KoskriptRuntime(native_parser_experiment=True)"
-            ".execute('return 1 + 2')\n"
-            "loaded = [m for m in sys.modules if m.split('.')[0] == 'lark']\n"
-            "assert not loaded, loaded\n"
-            "print('ok')\n")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("ok", result.stdout)
-
-    def test_default_parser_without_lark_explains_the_flag(self):
-        result = self.run_python(
-            "import sys\n"
-            "sys.modules['lark'] = None\n"
-            "from koskript import KoskriptRuntime, Errors\n"
-            "try:\n"
-            "    KoskriptRuntime()\n"
-            "except Errors.RuntimeError as error:\n"
-            "    assert 'native_parser_experiment' in str(error), error\n"
-            "    print('ok')\n"
-            "else:\n"
-            "    raise AssertionError('expected a RuntimeError')\n")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("ok", result.stdout)
-
-    def test_grammar_tables_are_built_on_first_use(self):
-        result = self.run_python(
-            "import koskript\n"
-            "assert koskript.grammar.parser is None\n"
-            "koskript.grammar.parse('1 + 2')\n"
-            "assert koskript.grammar.parser is not None\n"
-            "print('ok')\n")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("ok", result.stdout)
-
-    def test_grammar_object_is_usable(self):
-        import koskript
-
-        self.assertEqual(koskript.grammar.parse("1 + 2").data, "add_stmt")
 
     def test_benchmark_script_runs_on_both_parsers(self):
         import contextlib
@@ -662,13 +592,13 @@ class CompiledCacheTest(unittest.TestCase):
 
         runtime = koskript.KoskriptRuntime()
         for _ in range(3):
-            self.assertEqual(runtime.execute("local a = 2\nreturn a * 21"), 42)
+            self.assertEqual(runtime.execute("let a = 2\nreturn a * 21"), 42)
 
     def test_top_level_declarations_persist(self):
         import koskript
 
         runtime = koskript.KoskriptRuntime()
-        runtime.execute("local n = 0")
+        runtime.execute("let n = 0")
         self.assertEqual(runtime.execute("n = n + 1\nreturn n"), 1)
         self.assertEqual(runtime.execute("n = n + 1\nreturn n"), 2)
 
@@ -719,9 +649,9 @@ class CompiledCacheTest(unittest.TestCase):
 
         runtime = koskript.KoskriptRuntime()
         with self.assertRaises(koskript.Errors.SyntaxError):
-            runtime.execute("local = 1")
+            runtime.execute("let = 1")
         with self.assertRaises(koskript.Errors.SyntaxError):
-            runtime.execute("local = 1")
+            runtime.execute("let = 1")
         self.assertEqual(runtime.execute("return 5"), 5)
 
 

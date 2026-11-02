@@ -174,16 +174,11 @@ class KoskriptInterpreter(object):
             klass = container.klass
             info = klass._methods_cache.get(name)
             if info is not None:
-                if info.static:
+                if not info.static:
                     raise Errors.RuntimeError(
-                        f"'{name}' is static, call it as '{klass.name}.{name}()'")
-                if info.visibility == "private":
-                    self._check_private(info, info.defining_class)
-                if info.decorated is None:
-                    return info.code(
-                        self, info.closure, values,
-                        (container, info.defining_class, info))
-                return self._invoke_method_values(info, container, values)
+                        f"'{name}' is an instance method, call it with '::'")
+                raise Errors.RuntimeError(
+                    f"'{name}' is static, call it as '{klass.name}.{name}()'")
 
             found = klass._fields_cache.get(name)
             if found is None:

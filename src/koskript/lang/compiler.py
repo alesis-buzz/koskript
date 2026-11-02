@@ -22,9 +22,9 @@ from .errors import Errors
 
 _IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 _RESERVED_NAMES = frozenset((
-    "if", "elseif", "else", "while", "for", "foreach", "fn", "wrapper",
+    "if", "elseif", "else", "while", "for", "foreach", "fun", "wrapper",
     "return",
-    "local", "const", "true", "false", "null", "and", "or", "not", "in",
+    "let", "const", "true", "false", "null", "and", "or", "not", "in",
     "break", "continue", "class", "extends", "new", "static", "public",
     "private", "this", "super", "constructor", "import", "as",
     "error", "throw", "try", "catch", "finally", "namespace",
