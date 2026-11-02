@@ -82,8 +82,12 @@
           "match": "\\b(if|elseif|else|while|for|foreach|return|break|continue|throw|try|catch|finally)\\b"
         },
         {
+          "name": "keyword.koskript",
+          "match": "\\b(wrapper)\\b"
+        },
+        {
           "name": "keyword.declaration.koskript",
-          "match": "\\b(let|const|fun|wrapper|class|extends|namespace|error|import|as)\\b"
+          "match": "\\b(let|const|fun|class|extends|namespace|error|import|as)\\b"
         },
         {
           "name": "storage.modifier.koskript",
