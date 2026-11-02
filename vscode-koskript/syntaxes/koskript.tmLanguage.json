@@ -1,0 +1,123 @@
+{
+  "name": "Koskript",
+  "scopeName": "source.koskript",
+  "fileTypes": [
+    "kos"
+  ],
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#functions"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.koskript",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.koskript",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.koskript",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.koskript",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.koskript",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.bytes.koskript",
+          "match": "[bB](\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*')"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.koskript",
+          "match": "\\b[0-9]+\\.[0-9]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.koskript",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.koskript",
+          "match": "\\b(if|elseif|else|while|for|foreach|return|break|continue|throw|try|catch|finally)\\b"
+        },
+        {
+          "name": "keyword.declaration.koskript",
+          "match": "\\b(let|const|fun|wrapper|class|extends|namespace|error|import|as)\\b"
+        },
+        {
+          "name": "storage.modifier.koskript",
+          "match": "\\b(static|public|private)\\b"
+        },
+        {
+          "name": "constant.language.koskript",
+          "match": "\\b(true|false|null)\\b"
+        },
+        {
+          "name": "variable.language.koskript",
+          "match": "\\b(this|super|new)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.koskript",
+          "match": "\\b(and|or|not|in)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.koskript",
+          "match": "(==|!=|>=|<=|::|\\+|-|\\*|/|%|>|<|=)"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.koskript",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*(?=\\s*\\()"
+        }
+      ]
+    }
+  }
+}

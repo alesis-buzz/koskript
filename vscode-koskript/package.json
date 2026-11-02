@@ -1,0 +1,35 @@
+{
+  "name": "koskript",
+  "displayName": "Koskript",
+  "description": "Syntax highlighting for the Koskript language",
+  "version": "1.5.0",
+  "publisher": "alesis-buzz",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "koskript",
+        "aliases": [
+          "Koskript",
+          "kos"
+        ],
+        "extensions": [
+          ".kos"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "koskript",
+        "scopeName": "source.koskript",
+        "path": "./syntaxes/koskript.tmLanguage.json"
+      }
+    ]
+  }
+}
