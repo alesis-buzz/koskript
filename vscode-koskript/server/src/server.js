@@ -4,7 +4,7 @@ const { parse, collectSymbols } = require("./parser");
 const path = require("path");
 const fs = require("fs");
 
-const connection = createConnection(ProposedFeatures.all);
+const connection = createConnection(process.stdin, process.stdout);
 const documents = new TextDocuments(TextDocument);
 
 const KEYWORDS = ["let","const","fun","wrapper","class","extends","namespace","error","import","as","if","elseif","else","while","for","foreach","return","break","continue","throw","try","catch","finally","static","public","private","this","super","new","true","false","null","and","or","not","in"];
