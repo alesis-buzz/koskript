@@ -4,12 +4,19 @@
   "description": "Syntax highlighting for the Koskript language",
   "version": "1.5.0",
   "publisher": "alesis-buzz",
+  "main": "./client/extension.js",
+  "activationEvents": [
+    "onLanguage:koskript"
+  ],
   "engines": {
     "vscode": "^1.70.0"
   },
   "categories": [
     "Programming Languages"
   ],
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
   "contributes": {
     "languages": [
       {
