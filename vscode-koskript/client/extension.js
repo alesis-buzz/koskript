@@ -27,11 +27,3 @@ function deactivate() {
 }
 
 module.exports = { activate, deactivate };
-
-function deactivate() {
-  if (client) {
-    return client.stop();
-  }
-}
-
-module.exports = { activate, deactivate };

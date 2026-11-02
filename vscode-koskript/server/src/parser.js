@@ -345,16 +345,17 @@ function parse(code) {
 }
 
 function collectSymbols(code, baseDir) {
-  const syms = { functions: [], classes: [], constants: [] };
-  const fnRe = /\bfun\s+([A-Za-z_][A-Za-z0-9_]*)/g;
-  let m;
-  while ((m = fnRe.exec(code)) !== null) syms.functions.push(m[1]);
-  const classRe = /\bclass\s+([A-Za-z_][A-Za-z0-9_]*)/g;
-  while ((m = classRe.exec(code)) !== null) syms.classes.push(m[1]);
-  const constRe = /\bconst\s+([A-Za-z_][A-Za-z0-9_]*)/g;
-  while ((m = constRe.exec(code)) !== null) syms.constants.push(m[1]);
+  const syms = {
+    functions: [],
+    classes: [],
+    constants: [],
+    members: {},            // ClassName -> [{ name, kind }]
+    parents: {},            // ClassName -> parent ClassName
+    namespaceMembers: {},   // namespace/import alias -> symbol object
+    instantiations: {},     // variable -> ClassName
+  };
 
-  // namespaces
+  // namespace -> member list
   const nsRe = /\bnamespace\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{/g;
   let nsm;
   while ((nsm = nsRe.exec(code)) !== null) {
@@ -366,12 +367,56 @@ function collectSymbols(code, baseDir) {
       i++;
     }
     const body = code.slice(nsm.index + nsm[0].length, i - 1);
-    const prefix = nsm[1] + ".";
     const inner = collectSymbols(body, baseDir);
-    for (const f of inner.functions) syms.functions.push(prefix + f);
-    for (const c of inner.classes) syms.classes.push(prefix + c);
-    for (const v of inner.constants) syms.constants.push(prefix + v);
+    syms.namespaceMembers[nsm[1]] = inner;
   }
+
+  // objects: `let x = new Class(...)`
+  const objRe = /\b(?:let|const)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*new\s+([A-Za-z_.][A-Za-z0-9_.]*)/g;
+  let om;
+  while ((om = objRe.exec(code)) !== null) {
+    const className = om[2].split(".").pop();
+    syms.instantiations[om[1]] = className;
+  }
+
+  // class members (methods and fields)
+  const clsRe = /\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:(?:extends\s+[A-Za-z_][A-Za-z0-9_.]+)\s*)?\{/g;
+  let cm;
+  while ((cm = clsRe.exec(code)) !== null) {
+    const start = cm.index + cm[0].length;
+    let depth = 1;
+    let i = start;
+    while (i < code.length && depth > 0) {
+      if (code[i] === "{") depth++;
+      else if (code[i] === "}") depth--;
+      i++;
+    }
+    const body = code.slice(start, i - 1);
+    const members = [];
+    const seen = new Set();
+    const addMember = (name, kind) => {
+      if (name === "fun" || seen.has(name)) return;
+      seen.add(name);
+      members.push({ name, kind });
+    };
+    const methodRe = /\b(?:public|private|static)\s+fun\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(|\bfun\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+    let mm;
+    while ((mm = methodRe.exec(body)) !== null) addMember(mm[1] || mm[2], "method");
+    const fieldRe = /\b(?:public|private|static)\s+(?!fun\b)(?:let\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|$)/g;
+    while ((mm = fieldRe.exec(body)) !== null) addMember(mm[1], "field");
+    syms.members[cm[1]] = members;
+
+    const extMatch = /extends\s+([A-Za-z_][A-Za-z0-9_.]+)/.exec(cm[0]);
+    syms.parents[cm[1]] = extMatch ? extMatch[1].split(".").pop() : null;
+  }
+
+  const fnRe = /\bfun\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+  let m;
+  while ((m = fnRe.exec(code)) !== null) syms.functions.push(m[1]);
+  const classRe = /\bclass\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+  while ((m = classRe.exec(code)) !== null) syms.classes.push(m[1]);
+  const constRe = /\bconst\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+  while ((m = constRe.exec(code)) !== null) syms.constants.push(m[1]);
 
   const importRe = /\bimport\s+"([^"]+)"(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?/g;
   let im;
@@ -388,7 +433,27 @@ function collectSymbols(code, baseDir) {
     try {
       const imported = fs.readFileSync(full, "utf8");
       const isyms = collectSymbols(imported, path.dirname(full));
-      const prefix = alias ? alias + "." : "";
+      const aliasName = alias || path.basename(full).replace(/\.(kosh|kos|koskript)$/i, "");
+      if (!syms.namespaceMembers[aliasName]) syms.namespaceMembers[aliasName] = isyms;
+      else {
+        const tgt = syms.namespaceMembers[aliasName];
+        const mergeSyms = (arr) => { for (const x of arr) if (!tgt.includes(x)) tgt.push(x); };
+        mergeSyms(isyms.functions); mergeSyms(isyms.classes); mergeSyms(isyms.constants);
+        for (const [k, v] of Object.entries(isyms.members || {})) {
+          const t2 = tgt.members = tgt.members || {};
+          if (!t2[k]) t2[k] = v;
+        }
+        for (const [k, v] of Object.entries(isyms.namespaceMembers || {})) {
+          const t3 = tgt.namespaceMembers = tgt.namespaceMembers || {};
+          if (!t3[k]) t3[k] = v;
+        }
+        for (const [k, v] of Object.entries(isyms.instantiations || {})) {
+          const t4 = tgt.instantiations = tgt.instantiations || {};
+          t4[k] = v;
+        }
+      }
+      syms.namespaceMembers[aliasName].__path = full;
+      const prefix = (alias || aliasName) + ".";
       for (const f of isyms.functions) syms.functions.push(prefix + f);
       for (const c of isyms.classes) syms.classes.push(prefix + c);
       for (const v of isyms.constants) syms.constants.push(prefix + v);

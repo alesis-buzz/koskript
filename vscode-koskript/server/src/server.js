@@ -9,9 +9,22 @@ const documents = new TextDocuments(TextDocument);
 
 const KEYWORDS = ["let","const","fun","wrapper","class","extends","namespace","error","import","as","if","elseif","else","while","for","foreach","return","break","continue","throw","try","catch","finally","static","public","private","this","super","new","true","false","null","and","or","not","in"];
 const BUILTINS = ["print","len","type","typeof","str","int","float","bool","range","copy","array","map","string","bytes","math","json"];
+const STDLIB_MEMBERS = {
+  "array": ["push","pop","insert","remove_at","clear","sort","sort_by","reverse","slice","join","index_of","contains","map","filter","reduce","each"],
+  "map": ["keys","values","has","remove","merge"],
+  "string": ["upper","lower","trim","repeat","slice","replace","split","join","reverse","index_of","contains","starts_with","ends_with"],
+  "bytes": ["from_array","to_array","from_hex","to_hex","compare","index_of","contains","slice"],
+  "math": ["sqrt","pow","abs","floor","ceil","round","min","max","random","sin","cos","tan","atan","atan2","exp","log","PI","E"],
+  "json": ["encode","decode"],
+};
+
 
 documents.onDidChangeContent(change => {
   validate(change.document);
+});
+
+documents.onDidOpen(event => {
+  validate(event.document);
 });
 
 function validate(doc) {
@@ -55,8 +68,83 @@ connection.onCompletion(params => {
       for (const x of hs.functions) syms.functions.push(x);
       for (const x of hs.classes) syms.classes.push(x);
       for (const x of hs.constants) syms.constants.push(x);
+      for (const [k, v] of Object.entries(hs.members)) {
+        if (!syms.members[k]) syms.members[k] = v;
+      }
+      for (const [k, v] of Object.entries(hs.parents)) {
+        if (!syms.parents[k]) syms.parents[k] = v;
+      }
+      for (const [k, v] of Object.entries(hs.namespaceMembers)) {
+        if (!syms.namespaceMembers[k]) syms.namespaceMembers[k] = v;
+      }
+      // expose the header by its module name (as `import "utils"` would)
+      const modName = f.replace(/\.kosh$/i, "");
+      if (modName && !syms.namespaceMembers[modName]) syms.namespaceMembers[modName] = hs;
+      for (const [k, v] of Object.entries(hs.instantiations)) {
+        syms.instantiations[k] = v;
+      }
     }
   } catch (e) {}
+
+  const pos = params.position;
+  const line = text.split("\n")[pos.line] || "";
+  const before = line.slice(0, pos.character);
+
+  // `receiver.` or `receiver::` (optionally with a typed prefix)
+  const m = /([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)(::|\.)([A-Za-z0-9_]*)$/.exec(before);
+  if (m) {
+    let receiver = m[1];
+    const sep = m[2];
+    const partial = m[3];
+    const items = [];
+    const add = (label, kind) => {
+      if (!partial || label.startsWith(partial)) {
+        if (!items.some(i => i.label === label)) items.push({ label, kind });
+      }
+    };
+
+    // walk `extends` chains for class members
+    const getMembers = (cls, depth) => {
+      depth = depth || 0;
+      if (!cls || depth > 8 || !Array.isArray(syms.members[cls])) return [];
+      let out = syms.members[cls].slice();
+      const parent = syms.parents[cls];
+      if (parent && syms.members[parent]) {
+        for (const pm of getMembers(parent, depth + 1)) {
+          if (!out.some(x => x.name === pm.name)) out.push(pm);
+        }
+      }
+      return out;
+    };
+
+    let resolved = true;
+    if (STDLIB_MEMBERS[receiver]) {
+      for (const fn of STDLIB_MEMBERS[receiver]) {
+        if (sep === "::") continue;
+        if (/^[A-Z]/.test(fn)) add(fn, CompletionItemKind.Constant);
+        else add(fn, CompletionItemKind.Function);
+      }
+    } else if (syms.namespaceMembers[receiver] || (receiver.includes(".") && syms.namespaceMembers[receiver.split(".").pop()])) {
+      const aliasKey = receiver.split(".").pop();
+      const ns = syms.namespaceMembers[aliasKey] || syms.namespaceMembers[receiver];
+      for (const f of ns.functions) add(f, CompletionItemKind.Function);
+      for (const c of ns.classes) add(c, CompletionItemKind.Class);
+      for (const v of ns.constants) add(v, CompletionItemKind.Variable);
+    } else if (syms.instantiations[receiver]) {
+      for (const mm of getMembers(syms.instantiations[receiver])) {
+        add(mm.name, mm.kind === "field" ? CompletionItemKind.Field : CompletionItemKind.Method);
+      }
+    } else if (syms.members[receiver]) {
+      for (const mm of getMembers(receiver)) {
+        add(mm.name, mm.kind === "field" ? CompletionItemKind.Field : CompletionItemKind.Method);
+      }
+    } else {
+      resolved = false;
+    }
+
+    if (resolved) return items;
+  }
+
   const items = [];
   for (const kw of KEYWORDS) items.push({ label: kw, kind: CompletionItemKind.Keyword });
   for (const b of BUILTINS) items.push({ label: b, kind: CompletionItemKind.Function });
