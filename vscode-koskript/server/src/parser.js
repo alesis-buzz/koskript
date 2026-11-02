@@ -89,15 +89,21 @@ class Parser {
   }
   parseStatement() {
     const t = this.current().type;
+    if (t === "@") { while (this.accept("@")) { this.parseDottedName(); if (this.accept("(")) { this.parseArguments(); this.expect(")"); } } return this.parseStatement(); }
     if (t === "LET" || t === "CONST") return this.parseDeclaration();
     if (t === "FUN" || t === "WRAPPER") return this.parseFunction();
     if (t === "CLASS") return this.parseClass();
+    if (t === "ERROR") { this.pos++; this.expect("NAME"); this.parseParameters(); this.parseBlock(); return {type:"ErrorDef"}; }
+    if (t === "NAMESPACE") { this.pos++; this.expect("NAME"); this.parseBlock(); return {type:"NamespaceDef"}; }
+    if (t === "IMPORT") { this.pos++; this.parseExpression(); return {type:"ImportStmt"}; }
     if (t === "IF") return this.parseIf();
     if (t === "WHILE") return this.parseWhile();
     if (t === "FOR") return this.parseFor();
     if (t === "FOREACH") return this.parseForeach();
     if (t === "RETURN") { this.pos++; if (this.check("EOF") || this.check("}")) return {type:"ReturnStmt"}; this.parseExpression(); return {type:"ReturnStmt"}; }
     if (t === "BREAK") { this.pos++; return {type:"BreakStmt"}; }
+    if (t === "THROW") { this.pos++; this.parseExpression(); return {type:"ThrowStmt"}; }
+    if (t === "TRY") { this.pos++; this.parseBlock(); if (this.accept("CATCH")) { this.expect("NAME"); this.parseBlock(); } if (this.accept("FINALLY")) this.parseBlock(); return {type:"TryStmt"}; }
     if (t === "CONTINUE") { this.pos++; return {type:"ContinueStmt"}; }
     // expression statement
     this.parseExpression();
@@ -130,7 +136,19 @@ class Parser {
     this.pos++; // class
     this.expect("NAME");
     if (this.accept("EXTENDS")) this.parseDottedName();
-    this.parseBlock();
+    this.expect("{");
+    while (!this.check("}") && !this.check("EOF")) {
+      // modifiers
+      while (this.check("STATIC") || this.check("PUBLIC") || this.check("PRIVATE")) this.pos++;
+      if (this.check("FUN") || this.check("WRAPPER")) this.parseFunction();
+      else if (this.check("CONSTRUCTOR")) { this.pos++; this.parseParameters(); this.parseBlock(); }
+      else {
+        // field: NAME = expr
+        this.expect("NAME");
+        if (this.accept("=")) this.parseExpression();
+      }
+    }
+    this.expect("}");
     return {type:"ClassDef"};
   }
   parseBlock() {
@@ -247,8 +265,36 @@ class Parser {
     if (["NUMBER","STRING","NAME"].includes(t)) { this.pos++; return; }
     if (t === "[") { this.pos++; this.parseArray(); return; }
     if (t === "{") { this.pos++; this.parseMap(); return; }
-    if (t === "(") { this.pos++; this.parseExpression(); this.expect(")"); return; }
-    if (["TRUE","FALSE","NULL","THIS","NEW","SUPER"].includes(t)) { this.pos++; if (t==="SUPER") { this.expect("::"); this.expect("NAME"); this.expect("("); this.parseArguments(); this.expect(")"); } return; }
+    if (t === "(") {
+      this.pos++;
+      if (this.accept(")")) {
+        // lambda with no params
+        if (this.check("{")) this.parseBlock();
+        return;
+      }
+      this.parseExpression();
+      while (this.accept(",")) this.parseExpression();
+      this.expect(")");
+      if (this.check("{")) this.parseBlock();
+      return;
+    }
+    if (t === "NEW") {
+      this.pos++;
+      this.parseDottedName();
+      this.expect("(");
+      this.parseArguments();
+      this.expect(")");
+      return;
+    }
+    if (["TRUE","FALSE","NULL","THIS","SUPER"].includes(t)) {
+      this.pos++;
+      if (t==="SUPER") {
+        this.expect("::");
+        if (this.check("CONSTRUCTOR")) this.pos++; else this.expect("NAME");
+        this.expect("("); this.parseArguments(); this.expect(")");
+      }
+      return;
+    }
     if (t === "::") { this.pos++; this.expect("NAME"); this.expect("("); this.parseArguments(); this.expect(")"); return; }
     if (t === ".") { this.pos++; this.expect("NAME"); return; }
     throw new Error("Unexpected token " + t);
@@ -289,7 +335,10 @@ class Parser {
 
 function parse(code) {
   const p = new Parser(code);
-  return p.parse();
+  try { return p.parse(); }
+  catch (e) {
+    throw new Error(e.message);
+  }
 }
 
 function collectSymbols(code) {
