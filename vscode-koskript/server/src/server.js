@@ -7,7 +7,7 @@ const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 const KEYWORDS = ["let","const","fun","wrapper","class","extends","namespace","error","import","as","if","elseif","else","while","for","foreach","return","break","continue","throw","try","catch","finally","static","public","private","this","super","new","true","false","null","and","or","not","in"];
-const BUILTINS = ["print","len","type","typeof","str","int","float","bool","range","copy"];
+const BUILTINS = ["print","len","type","typeof","str","int","float","bool","range","copy","array","map","string","bytes","math","json"];
 
 documents.onDidChangeContent(change => {
   validate(change.document);
