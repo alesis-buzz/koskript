@@ -25,17 +25,17 @@ from Python report their Python type name instead, except `bytes` and
 ## Variables
 
 ```koskript
-local x = 10
-local pi = 3.14
-local name = "Koskript"
-local active = true
-local missing = null
-local items = [1, 2, 3]
-local empty = []
-local config = { "debug": true, "version": 1 }
+let x = 10
+let pi = 3.14
+let name = "Koskript"
+let active = true
+let missing = null
+let items = [1, 2, 3]
+let empty = []
+let config = { "debug"= true, "version"= 1 }
 ```
 
-Variables declared with `local` are scoped to the block they are declared in —
+Variables declared with `let` are scoped to the block they are declared in —
 including `if`, `while`, `for` and `foreach` bodies. A variable declared inside
 a block is not visible after the block ends.
 
@@ -51,8 +51,8 @@ Koskript uses lexical scoping:
 - A function called by another function cannot see the caller's locals.
 
 ```koskript
-fn make_counter() {
-    local n = 0
+fun make_counter() {
+    let n = 0
     return () {
         n = n + 1
         return n
@@ -63,9 +63,9 @@ const next = make_counter()
 print(next())   // 1
 print(next())   // 2
 
-fn read_x() { return x }
-fn caller() {
-    local x = 5
+fun read_x() { return x }
+fun caller() {
+    let x = 5
     return read_x()   // error: 'x' is not defined
 }
 ```
@@ -78,7 +78,7 @@ modified:
 
 ```koskript
 const PI = 3.14
-const CONFIG = { "debug": true }
+const CONFIG = { "debug"= true }
 
 CONFIG.debug = false   // ok, the binding is constant, not the contents
 
@@ -88,11 +88,11 @@ PI = 3.0               // error: cannot modify a constant value
 ## Functions
 
 ```koskript
-fn add(a, b) {
+fun add(a, b) {
     return a + b
 }
 
-local result = add(10, 20)
+let result = add(10, 20)
 ```
 
 - `return` without a value exits the function returning `null`.
@@ -114,28 +114,28 @@ wrapper loud(target) {
 }
 
 @loud
-fn greet(name) {
+fun greet(name) {
     return "hola " + name
 }
 
 print(greet("Ana"))   // hola Ana!
 ```
 
-`@Decorator` wraps the `fn` or method written below it, like Python
+`@Decorator` wraps the `fun` or method written below it, like Python
 decorators:
 
-- `@Decorator` is `fn = Decorator(fn)`.
-- `@Decorator(args)` is `fn = Decorator(args)(fn)`.
-- Multiple decorators apply bottom-up: `@a @b fn f` is `a(b(f))`.
+- `@Decorator` is `fun = Decorator(fun)`.
+- `@Decorator(args)` is `fun = Decorator(args)(fun)`.
+- Multiple decorators apply bottom-up: `@a @b fun f` is `a(b(f))`.
 - Decorator expressions run once, when the definition executes.
 
-They can decorate top-level `fn`, nested `fn` inside functions and methods,
+They can decorate top-level `fun`, nested `fun` inside functions and methods,
 and class methods:
 
 ```koskript
 class Api {
     @loud
-    public fn ping() { return "pong" }
+    public fun ping() { return "pong" }
 }
 ```
 
@@ -182,7 +182,7 @@ print(m.double(21))
 - The `.kos` extension is optional.
 - The default binding is the file name without the extension. Use `as` to pick
   another name (also required when the file name is not a valid identifier).
-- A module exposes its top-level `local`, `const`, `fn` and `class` names as
+- A module exposes its top-level `let`, `const`, `fun` and `class` names as
   members. `const` members are read-only; the other members can be read and
   updated and reflect the module's live state.
 - Modules are loaded once per runtime and cached: importing the same file
@@ -215,7 +215,7 @@ creating a module:
 namespace Utils {
     const MAX = 3
 
-    fn double(x) { return x * 2 }
+    fun double(x) { return x * 2 }
 
     class Point {
         public x = 0
@@ -228,7 +228,7 @@ print(Utils.MAX)              // 3
 print(new Utils.Point(1).x)   // 1
 ```
 
-- Namespaces can only contain declarations: `fn`, `wrapper`, `class`, `const`,
+- Namespaces can only contain declarations: `fun`, `wrapper`, `class`, `const`,
   `error`, `import` and nested namespaces.
 - Members reference each other by short name and can also read the enclosing
   scope, including locals of the function that declares the namespace.
@@ -242,10 +242,10 @@ print(new Utils.Point(1).x)   // 1
 ## Operators
 
 ```koskript
-local a = 2 + 3 * 4      // 14  (precedence: * / % before + -)
-local b = 10 % 3         // 1
-local c = -a             // unary minus
-local d = (a + b) * 2    // grouping with parentheses
+let a = 2 + 3 * 4      // 14  (precedence: * / % before + -)
+let b = 10 % 3         // 1
+let c = -a             // unary minus
+let d = (a + b) * 2    // grouping with parentheses
 
 if (x >= 10 and not done or retry) {
     // ...
@@ -323,7 +323,7 @@ they expose `e.name`, `e.message` and the original exception in `e.native`:
 
 ```koskript
 try {
-    local x = 1 / 0
+    let x = 1 / 0
 } catch e {
     print(e.name)      // ZeroDivisionError
     print(e.message)   // division by zero
@@ -336,14 +336,14 @@ Lambdas are anonymous functions; the last expression is **not** returned
 implicitly, use `return`:
 
 ```koskript
-local greet = () {
+let greet = () {
     print("Hello world")
 }
 
 greet()
 
 // lambdas can take parameters and return values
-local add = (a, b) {
+let add = (a, b) {
     return a + b
 }
 
@@ -354,7 +354,7 @@ print((() { return 42 })())
 ```
 
 Lambdas and nested functions capture the scope where they are defined, so they
-keep local state after the enclosing function returns (see
+keep let state after the enclosing function returns (see
 [Scoping](#scoping)). Inside a method, closures also capture `this`, so they can
 use fields, private members and `::Method()`.
 
@@ -398,7 +398,7 @@ for (item in items) {
 ## Member Access
 
 ```koskript
-local user = { "name": "Aleix", "age": 17 }
+let user = { "name": "Aleix", "age": 17 }
 print(user.name)
 print(user.age)
 ```
@@ -418,15 +418,15 @@ for the full comparison.
 ## Index Access
 
 ```koskript
-local items = [10, 20, 30]
+let items = [10, 20, 30]
 print(items[0])        // 10
 print(items[-1])       // 30
 
-local config = { "debug": true }
+let config = { "debug"= true }
 print(config["debug"]) // true
 
 // member access and indexing can be chained on the same line
-local data = { "nums": [1, 2, 3] }
+let data = { "nums": [1, 2, 3] }
 print(data.nums[1])    // 2
 ```
 
@@ -453,9 +453,9 @@ There is no string interpolation yet; concatenate with `+` or use
 prefix before the quotes:
 
 ```koskript
-local empty = b""
-local text = b"Koskript"
-local binary = b"\x00\x01\xff"
+let empty = b""
+let text = b"Koskript"
+let binary = b"\x00\x01\xff"
 
 print(len(binary))     // 3
 print(binary[2])       // 255
@@ -494,7 +494,7 @@ There are no block comments.
 
 The following words cannot be used as identifiers:
 
-`if` `elseif` `else` `while` `for` `foreach` `fn` `wrapper` `return` `local`
+`if` `elseif` `else` `while` `for` `foreach` `fun` `wrapper` `return` `let`
 `const` `true` `false` `null` `and` `or` `not` `in` `break` `continue` `class`
 `extends` `new` `static` `public` `private` `this` `super` `constructor`
 `import` `as` `error` `throw` `try` `catch` `finally` `namespace`
@@ -509,12 +509,12 @@ with `.`, `::`, `[` or `(` never continues the expression above it. A
 postfix operator must stay on the same line as the expression it extends:
 
 ```koskript
-local r = math.random()
+let r = math.random()
 (r >= 0) and (r < 1)   // two statements: the call, then the condition
 
-local a = f(1)(2)      // same line: chained calls
+let a = f(1)(2)      // same line: chained calls
 
-local b = f(1)
+let b = f(1)
 [2]                    // two statements: the call, then an array
 ```
 
@@ -525,7 +525,7 @@ starting with `(b))` is a syntax error: keep the call on one line or split
 the arguments after the commas.
 
 ```koskript
-local x = values.filter(
+let x = values.filter(
     (v) { return v > 0 },   // fine: the line starts a new argument
 )
 ```
