@@ -124,7 +124,7 @@ class Parser {
     this.pos++; // fun/wrapper
     this.expect("NAME");
     this.parseParameters();
-    this.parseBlock();
+    if (this.check("{")) this.parseBlock();
     return {type:"FnDef"};
   }
   parseParameters() {
@@ -146,7 +146,7 @@ class Parser {
       if (this.check("FUN") || this.check("WRAPPER")) this.parseFunction();
       else if (this.check("CONSTRUCTOR")) { this.pos++; this.parseParameters(); this.parseBlock(); }
       else {
-        // field: NAME = expr
+        // field: NAME [= expr]
         this.expect("NAME");
         if (this.accept("=")) this.parseExpression();
       }
