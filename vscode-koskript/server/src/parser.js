@@ -95,6 +95,7 @@ class Parser {
     if (t === "CLASS") return this.parseClass();
     if (t === "ERROR") { this.pos++; this.expect("NAME"); this.parseParameters(); this.parseBlock(); return {type:"ErrorDef"}; }
     if (t === "NAMESPACE") { this.pos++; this.expect("NAME"); this.parseBlock(); return {type:"NamespaceDef"}; }
+    if (t === "IMPORT") { this.pos++; this.parseExpression(); if (this.accept("AS")) this.expect("NAME"); return {type:"ImportStmt"}; }
     if (t === "IMPORT") { this.pos++; this.parseExpression(); return {type:"ImportStmt"}; }
     if (t === "IF") return this.parseIf();
     if (t === "WHILE") return this.parseWhile();
