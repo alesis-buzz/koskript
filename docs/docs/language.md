@@ -530,7 +530,7 @@ let x = values.filter(
 )
 ```
 
-## Headers (`.kosh`)
+## Koskript Headers (`.kosh`)
 
 `.kosh` files are **editor/tooling headers only**. They are not part of the
 Koskript language runtime and are never executed by `KoskriptRuntime`. They
