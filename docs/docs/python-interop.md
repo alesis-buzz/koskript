@@ -126,7 +126,7 @@ def logged(fn):
 runtime = KoskriptRuntime({"logged": logged})
 runtime.execute("""
 @logged
-fn greet(name) { return "hi " + name }
+fun greet(name) { return "hi " + name }
 
 wrapper add_two(x) { x + 2 }
 """)

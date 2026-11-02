@@ -64,15 +64,15 @@ runtime.register_many(build_globals())
 ```koskript
 print(len([1, 2, 3]))          // 3
 print(type(3.5))                // float
-print(str({ "a": [1, 2] }))     // {"a": [1, 2]}
+print(str({ "a"= [1, 2] }))     // {"a": [1, 2]}
 print(int("42") + 1)            // 43
 
-local total = 0
+let total = 0
 for (i in range(1, 4)) { total = total + i }
 print(total)                    // 6
 
-local original = { "x": [1] }
-local clone = copy(original)
+let original = { "x"= [1] }
+let clone = copy(original)
 array.push(clone.x, 2)
 print(len(original.x), len(clone.x))   // 1 2
 ```
@@ -88,13 +88,13 @@ print(len(original.x), len(clone.x))   // 1 2
 | `map.merge(target, other)` | Copies the entries of `other` into `target` and returns `target`. |
 
 ```koskript
-local config = { "debug": true, "port": 8080 }
+let config = { "debug"= true, "port"= 8080 }
 
 print(str(map.keys(config)))     // [debug, port]
 print(map.has(config, "port"))   // true
 print(map.remove(config, "port"))// 8080
 
-map.merge(config, { "host": "localhost" })
+map.merge(config, { "host"= "localhost" })
 print(len(config))               // 2
 ```
 
@@ -123,7 +123,7 @@ Higher-order callbacks can be lambdas, functions, bound methods or Python
 callables:
 
 ```koskript
-local numbers = [3, 1, 2]
+let numbers = [3, 1, 2]
 
 print(array.map(numbers, (x) { return x * 2 }))     // [6, 2, 4]
 print(array.filter(numbers, (x) { return x > 1 }))  // [3, 2]
@@ -139,7 +139,7 @@ array.each(numbers, (x) { print("value:", x) })
 order of equal keys:
 
 ```koskript
-local words = ["bb", "a", "ccc"]
+let words = ["bb", "a", "ccc"]
 array.sort_by(words, (w) { return len(w) })
 print(array.join(words, " "))   // a bb ccc
 ```
@@ -188,7 +188,7 @@ print(bytes.to_string(b"\xc3\xb1"))     // ñ
 print(bytes.hex(b"abc"))                // 0x616263
 print(bytes.from_hex("0x6162"))         // 0x6162
 
-local packed = bytes.from_array([104, 105])
+let packed = bytes.from_array([104, 105])
 print(bytes.to_array(packed))           // [104, 105]
 print(bytes.contains(packed, b"i"))     // true
 print(bytes.slice(packed, 1))           // 0x69
@@ -233,10 +233,10 @@ Domain errors such as `math.sqrt(-1)` or `math.log(0)` raise
 | `json.decode(text)` | Parses a JSON string into arrays, maps and primitives. |
 
 ```koskript
-local text = json.encode({ "name": "Koskript", "tags": ["dsl", "python"] })
+let text = json.encode({ "name"= "Koskript", "tags"= ["dsl", "python"] })
 print(text)                       // {"name": "Koskript", "tags": ["dsl", "python"]}
 
-local data = json.decode(text)
+let data = json.decode(text)
 print(data.name)                  // Koskript
 print(data.tags[1])               // python
 ```

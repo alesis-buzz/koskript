@@ -43,6 +43,10 @@ constants without providing implementations.
 - Only declarations are allowed; no executable statements.
 - Headers are parsed by the LSP and indexed for autocompletion.
 - `.kosh` files are not loaded by `import` in Koskript scripts.
+- The LSP scans `.kosh` files in the same directory as the `.kos` file being
+  edited and exposes their symbols.
+- Symbols from headers are merged with the symbols of the current file, so
+  editor tools can offer a single global surface of completions.
 
 ## Do they execute?
 

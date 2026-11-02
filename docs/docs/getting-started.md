@@ -31,8 +31,8 @@ runtime = KoskriptRuntime({
 })
 
 runtime.execute("""
-local x = 10
-local y = 26
+let x = 10
+let y = 26
 
 print(x + y)
 """)
@@ -52,10 +52,10 @@ global you provide overrides the standard library version.
 
 ```koskript
 // Student grade checker
-local students = {
-    "Aleix": { "age": 17, "grade": 95 },
-    "Maria": { "age": 15, "grade": 72 },
-    "Juan":  { "age": 18, "grade": 88 }
+let students = {
+    "Aleix"= { "age"= 17, "grade"= 95 },
+    "Maria"= { "age"= 15, "grade"= 72 },
+    "Juan"=  { "age"= 18, "grade"= 88 }
 }
 
 const passing_grade = 75

@@ -65,7 +65,7 @@ evaluated expression, or the value of a top-level `return`:
 ```python
 runtime = KoskriptRuntime()
 
-result = runtime.execute("local x = 10\nx * 2")   # 20
+result = runtime.execute("let x = 10\nx * 2")   # 20
 result = runtime.execute("return 1 + 2")          # 3
 ```
 
@@ -74,7 +74,7 @@ between calls.
 
 The compiled form of a source is cached by the runtime, so running the *same*
 source again skips parsing and compiling it: only the script body runs. The
-cache holds the last 32 sources of a runtime. Top-level `local` and `const`
+cache holds the last 32 sources of a runtime. Top-level `let` and `const`
 declarations are shared between runs, and globals registered with `register()`
 are read again on every run, so a script always sees the current values.
 
@@ -189,7 +189,7 @@ from koskript import Errors
 runtime = KoskriptRuntime()
 
 try:
-    runtime.execute("local a = [1]\nprint(a[5])")
+    runtime.execute("let a = [1]\nprint(a[5])")
 except Errors.RuntimeError as e:
     print("script failed:", e)
 ```
@@ -198,11 +198,11 @@ Syntax errors are formatted with the offending line:
 
 ```python
 try:
-    runtime.execute("local = 1")
+    runtime.execute("let = 1")
 except Errors.SyntaxError as e:
     print(e)
 # Syntax error at line 1, column 7:
-# local = 1
+# let = 1
 #       ^
 # Unexpected token...
 ```
@@ -243,7 +243,7 @@ same AST without needing Lark:
 ```python
 from koskript.lang.parser import parse
 
-ast = parse("local x = 1 + 2")
+ast = parse("let x = 1 + 2")
 ```
 
 `parse` raises `Errors.SyntaxError` with the line, column and context, exactly
@@ -252,7 +252,7 @@ like `execute` does, and the tokenizer is available on its own:
 ```python
 from koskript.lang.lexer import Lexer
 
-tokens = Lexer("local x = 1").tokenize()
+tokens = Lexer("let x = 1").tokenize()
 ```
 
 This is an internal API; it may change between releases.
