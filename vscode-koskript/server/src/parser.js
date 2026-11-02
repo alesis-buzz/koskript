@@ -491,9 +491,12 @@ function mergeSymbols(target, source) {
   }
 }
 
-function collectSymbols(code, baseDir, seen) {
+function collectSymbols(code, baseDir, seen, resolve) {
   const syms = emptySymbols();
   seen = seen || new Set();
+  // `resolve(specifier, fromDir)` lets the server look imports up in the
+  // project-wide header index; without it imports are relative to `baseDir`.
+  const resolveImportPath = resolve || resolveImport;
 
   let tokens;
   try {
@@ -627,12 +630,12 @@ function collectSymbols(code, baseDir, seen) {
           alias = tokens[j + 1].value;
           j += 2;
         }
-        const full = resolveImport(unquoteLiteral(pathTok.value), baseDir);
+        const full = resolveImportPath(unquoteLiteral(pathTok.value), baseDir);
         if (full && !seen.has(full)) {
           seen.add(full);
           try {
             const imported = fs.readFileSync(full, "utf8");
-            const isyms = collectSymbols(imported, path.dirname(full), seen);
+            const isyms = collectSymbols(imported, path.dirname(full), seen, resolveImportPath);
             const container = current();
             const target = (container.kind === "global" || container.kind === "namespace") ? container.syms : syms;
             const aliasName = alias || path.basename(full).replace(/\.(kosh|kos|koskript)$/i, "");

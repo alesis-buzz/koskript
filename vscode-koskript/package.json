@@ -25,7 +25,7 @@
     "kosh"
   ],
   "scripts": {
-    "test": "node test-parser.js && node test-docs.js && node test-completions.js"
+    "test": "node test-parser.js && node test-docs.js && node test-headers.js && node test-completions.js"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1",

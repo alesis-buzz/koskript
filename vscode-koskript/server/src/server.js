@@ -1,12 +1,15 @@
-const { createConnection, TextDocuments, TextDocumentSyncKind, CompletionItemKind } = require("vscode-languageserver/node");
+const { createConnection, TextDocuments, TextDocumentSyncKind, CompletionItemKind, DidChangeWatchedFilesNotification } = require("vscode-languageserver/node");
 const { TextDocument } = require("vscode-languageserver-textdocument");
 const { parse, collectSymbols, enclosingClass } = require("./parser");
-const { fileURLToPath } = require("url");
+const { HeaderIndex, MODULE_RE } = require("./headers");
+const { fileURLToPath, pathToFileURL } = require("url");
 const path = require("path");
-const fs = require("fs");
 
 const connection = createConnection(process.stdin, process.stdout);
 const documents = new TextDocuments(TextDocument);
+
+// Every `.kosh` in the project is visible from every script, wherever it lives.
+const headers = new HeaderIndex();
 
 const KEYWORDS = ["let","const","fun","wrapper","class","extends","namespace","error","import","as","if","elseif","else","while","for","foreach","return","break","continue","throw","try","catch","finally","static","public","private","constructor","this","super","new","true","false","null","and","or","not","in"];
 const BUILTINS = ["print","len","type","typeof","str","int","float","bool","range","copy","loadcode","array","map","string","bytes","math","json"];
@@ -47,14 +50,19 @@ function pushUnique(list, value) {
 }
 
 documents.onDidChangeContent(change => {
+  // An open header is served from memory, so the index must re-read it before
+  // the next completion in any other file.
+  if (/\.kosh$/i.test(change.document.uri)) headers.invalidate();
   validate(change.document);
 });
 
 documents.onDidOpen(event => {
+  if (/\.kosh$/i.test(event.document.uri)) headers.invalidate();
   validate(event.document);
 });
 
 documents.onDidClose(event => {
+  if (/\.kosh$/i.test(event.document.uri)) headers.invalidate();
   connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
 });
 
@@ -79,15 +87,52 @@ function validate(doc) {
   connection.sendDiagnostics({ uri: doc.uri, diagnostics });
 }
 
-connection.onInitialize(() => {
+connection.onInitialize(params => {
+  headers.setRoots(workspaceRoots(params));
+  // Serve unsaved header edits straight from the open documents.
+  headers.setTextProvider(absPath => {
+    const doc = documentForPath(absPath);
+    return doc ? doc.getText() : null;
+  });
+
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       completionProvider: { triggerCharacters: [".", ":"] },
-      documentSymbolProvider: true
+      documentSymbolProvider: true,
+      workspace: {
+        workspaceFolders: { supported: true, changeNotifications: true }
+      }
     }
   };
 });
+
+connection.onInitialized(() => {
+  // Pick up headers created, deleted or edited outside the editor.
+  try {
+    connection.client.register(DidChangeWatchedFilesNotification.type, {
+      watchers: [{ globPattern: "**/*.{kosh,kos}" }]
+    });
+  } catch (e) {
+    // Older clients may not support dynamic registration; the TTL still works.
+  }
+});
+
+connection.onDidChangeWatchedFiles(() => headers.invalidate());
+
+let currentWorkspaceFolders = [];
+
+function workspaceRoots(params) {
+  const folders = (params && params.workspaceFolders) || [];
+  currentWorkspaceFolders = folders.slice();
+  const roots = folders.map(f => pathOf(f.uri)).filter(Boolean);
+  if (!roots.length) {
+    const root = params && (params.rootUri || (params.rootPath ? uriOf(params.rootPath) : null));
+    const dir = pathOf(root);
+    if (dir) roots.push(dir);
+  }
+  return roots;
+}
 
 connection.onCompletion(params => {
   try {
@@ -101,9 +146,11 @@ connection.onCompletion(params => {
 function complete(params) {
   const doc = documents.get(params.textDocument.uri);
   const text = doc ? doc.getText() : "";
-  const bd = baseDir(params.textDocument.uri);
-  const syms = collectSymbols(text, bd);
-  addHeaderSymbols(syms, bd);
+  const file = pathOf(params.textDocument.uri);
+  const bd = file ? path.dirname(file) : baseDir(params.textDocument.uri);
+  const resolve = file ? headers.resolverFor(file) : undefined;
+  const syms = collectSymbols(text, bd, undefined, resolve);
+  mergeHeaders(syms, file ? headers.entriesFor(file) : []);
 
   const pos = params.position;
   const line = text.split("\n")[pos.line] || "";
@@ -211,22 +258,11 @@ function resolveNamespace(syms, receiver) {
   return null;
 }
 
-function addHeaderSymbols(syms, bd) {
-  let files;
-  try {
-    files = fs.readdirSync(bd);
-  } catch (e) {
-    return;
-  }
-  for (const f of files) {
-    if (!f.toLowerCase().endsWith(".kosh")) continue;
-    const full = path.join(bd, f);
-    let hs;
-    try {
-      hs = collectSymbols(fs.readFileSync(full, "utf8"), bd);
-    } catch (e) {
-      continue;
-    }
+// Merge the project headers into the document symbols. Entries arrive nearest
+// first, so a header next to the script wins over a same-named one further up.
+function mergeHeaders(syms, entries) {
+  for (const entry of entries) {
+    const hs = entry.symbols;
     for (const x of hs.functions) pushUnique(syms.functions, x);
     for (const x of hs.classes) pushUnique(syms.classes, x);
     for (const x of hs.constants) pushUnique(syms.constants, x);
@@ -242,10 +278,10 @@ function addHeaderSymbols(syms, bd) {
     for (const [k, v] of Object.entries(hs.instantiations)) {
       syms.instantiations[k] = v;
     }
-    // expose the header by its module name (as `import "utils"` would)
-    const modName = f.replace(/\.kosh$/i, "");
-    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(modName) && !syms.namespaceMembers[modName]) {
-      syms.namespaceMembers[modName] = hs;
+    // Expose the header by its module name, so `utils.` completes even when
+    // the script does not `import "utils"` explicitly.
+    if (MODULE_RE.test(entry.moduleName) && !syms.namespaceMembers[entry.moduleName]) {
+      syms.namespaceMembers[entry.moduleName] = hs;
     }
   }
 }
@@ -271,12 +307,31 @@ connection.onDocumentSymbol(params => {
 });
 
 function baseDir(uri) {
+  const file = pathOf(uri);
+  return file ? path.dirname(file) : process.cwd();
+}
+
+function pathOf(uri) {
+  if (!uri) return null;
   try {
-    if (!uri || !uri.startsWith("file:")) return process.cwd();
-    return path.dirname(fileURLToPath(uri));
+    if (!String(uri).startsWith("file:")) return path.resolve(String(uri));
+    return path.resolve(fileURLToPath(String(uri)));
   } catch (e) {
-    return process.cwd();
+    return null;
   }
+}
+
+function uriOf(file) {
+  return pathToFileURL(path.resolve(file)).toString();
+}
+
+// The open TextDocument backing an absolute path, if the editor has it open.
+function documentForPath(absPath) {
+  const target = path.resolve(absPath);
+  for (const doc of documents.all()) {
+    if (pathOf(doc.uri) === target) return doc;
+  }
+  return null;
 }
 
 documents.listen(connection);
