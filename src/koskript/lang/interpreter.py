@@ -102,7 +102,7 @@ class KoskriptInterpreter(object):
 
     # CALLS #####################################################################
 
-    def call_value(self, value, values: list):
+    def call_value(self, value, values: list, kwargs=None):
         """Invoke a Koskript or Python callable with already evaluated values."""
         kind = type(value)
 
@@ -110,18 +110,23 @@ class KoskriptInterpreter(object):
             frame = value.frame
             if frame is None:
                 frame = EMPTY_FRAME
-            return value.code(self, value.closure, values, frame)
+            return value.code(
+                self, value.closure,
+                self._bind_kwargs(value.params, values, kwargs), frame)
 
         if kind is BoundMethod:
-            return self._invoke_method_values(value.info, value.instance, values)
+            return self._invoke_method_values(
+                value.info, value.instance, values, kwargs)
 
         # Plain Python callables are the common interop case, so they are
         # checked before the remaining Koskript runtime types.
         if callable(value):
+            if kwargs:
+                return value(*values, **kwargs)
             return value(*values)
 
         if kind is KoskriptObject:
-            return self.call_value(value.value, values)
+            return self.call_value(value.value, values, kwargs)
 
         if kind is KoskriptClass:
             raise Errors.RuntimeError(
@@ -162,13 +167,31 @@ class KoskriptInterpreter(object):
             self._native_errors[kind] = error_type
         return ErrorInstance(error_type, {"message": str(exc)}, exc)
 
-    def _call_function(self, func: Function, values: list):
+    def _call_function(self, func: Function, values: list, kwargs=None):
         frame = func.frame
         if frame is None:
             frame = EMPTY_FRAME
+        values = self._bind_kwargs(func.params, values, kwargs)
         return func.code(self, func.closure, values, frame)
 
-    def call_member_values(self, container, name: str, values: list):
+    def _bind_kwargs(self, params, values, kwargs):
+        params = list(params)
+        values = list(values or [])
+        n = len(params)
+        if len(values) > n:
+            raise Errors.RuntimeError("too many positional arguments")
+        result = [None] * n
+        for index, value in enumerate(values):
+            result[index] = value
+        if kwargs:
+            for key, value in kwargs.items():
+                if key not in params:
+                    raise Errors.RuntimeError(
+                        f"unexpected keyword argument '{key}'")
+                result[params.index(key)] = value
+        return result
+
+    def call_member_values(self, container, name: str, values: list, kwargs=None):
         """Call ``container.name(values)`` without materializing a bound method."""
         if type(container) is KoskriptInstance:
             klass = container.klass
@@ -188,9 +211,9 @@ class KoskriptInterpreter(object):
             defining_class, field = found
             if field.visibility == "private":
                 self._check_private(field, defining_class)
-            return self.call_value(container.fields[field.slot], values)
+            return self.call_value(container.fields[field.slot], values, kwargs)
 
-        return self.call_value(self._member_get(container, name), values)
+        return self.call_value(self._member_get(container, name), values, kwargs)
 
     def this_member_get(self, attr: str):
         """Fast path for ``this.attr`` inside a method."""
@@ -224,7 +247,8 @@ class KoskriptInterpreter(object):
                 return
         raise Errors.RuntimeError("'this' can only be used inside an instance method")
 
-    def _invoke_method_values(self, info: MethodInfo, instance, values: list):
+    def _invoke_method_values(self, info: MethodInfo, instance, values: list, kwargs=None):
+        values = self._bind_kwargs(info.params, values, kwargs)
         decorated = info.decorated
         if decorated is not None:
             frames = self.method_frames
@@ -234,7 +258,8 @@ class KoskriptInterpreter(object):
                 # Wrappers created at class-definition time also get the
                 # invocation frame, so `this` and `::Method()` work in them.
                 if type(decorated) is Function:
-                    return decorated.code(self, decorated.closure, values, frame)
+                    return decorated.code(
+                        self, decorated.closure, values, frame)
                 return self.call_value(decorated, values)
             finally:
                 frames.pop()
@@ -264,10 +289,12 @@ class KoskriptInterpreter(object):
                 return frame[0]
         raise Errors.RuntimeError("'this' can only be used inside an instance method")
 
-    def new_value(self, name, target, values: list):
+    def new_value(self, name, target, values: list, kwargs=None):
         if type(target) is KoskriptClass:
-            return self._instantiate(target, values)
+            return self._instantiate(target, values, kwargs)
         if inspect.isclass(target):
+            if kwargs:
+                return target(*values, **kwargs)
             return target(*values)
         raise Errors.RuntimeError(f"'{name}' is not a class")
 
@@ -360,7 +387,7 @@ class KoskriptInterpreter(object):
         klass._build_lookup_cache()
         return klass
 
-    def _instantiate(self, klass: KoskriptClass, values: list) -> KoskriptInstance:
+    def _instantiate(self, klass: KoskriptClass, values: list, kwargs=None) -> KoskriptInstance:
         instance = KoskriptInstance(klass)
 
         # Field initializers and their slots are fixed after the class is
@@ -401,12 +428,13 @@ class KoskriptInterpreter(object):
             if constructor.visibility == "private":
                 self._check_private(constructor, constructor.defining_class)
             constructor.code(
-                self, constructor.closure, values,
+                self, constructor.closure,
+                self._bind_kwargs(constructor.params, values, kwargs),
                 (instance, constructor.defining_class, constructor))
 
         return instance
 
-    def _method_call_values(self, name: str, values: list):
+    def _method_call_values(self, name: str, values: list, kwargs=None):
         frame = self._current_frame()
 
         if frame is None or frame[1] is None:
@@ -432,9 +460,9 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(f"'{name}' is static, call it as .{name}()")
 
         self._check_private(info, info.defining_class)
-        return self._invoke_method_values(info, frame[0], values)
+        return self._invoke_method_values(info, frame[0], values, kwargs)
 
-    def _bound_method_call_values(self, container, name: str, values: list):
+    def _bound_method_call_values(self, container, name: str, values: list, kwargs=None):
         if type(container) is KoskriptInstance:
             info = container.klass.find_method(name)
             if info is None:
@@ -446,7 +474,7 @@ class KoskriptInterpreter(object):
                     f"'{name}' is static, call it as '{container.klass.name}.{name}()'")
 
             self._check_private(info, info.defining_class)
-            return self._invoke_method_values(info, container, values)
+            return self._invoke_method_values(info, container, values, kwargs)
 
         if type(container) is KoskriptClass:
             info = container.find_method(name)
@@ -467,9 +495,11 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(
                 f"'{name}' is not a method of {type(container).__name__}")
 
+        if kwargs:
+            return method(*values, **kwargs)
         return method(*values)
 
-    def _super_call_values(self, name: str, values: list):
+    def _super_call_values(self, name: str, values: list, kwargs=None):
         frame = self._current_frame()
 
         if frame is None or frame[0] is None:
@@ -489,7 +519,7 @@ class KoskriptInterpreter(object):
                 raise Errors.RuntimeError(f"class '{parent.name}' has no constructor")
 
             self._check_private(constructor, constructor.defining_class)
-            self._invoke_method_values(constructor, frame[0], values)
+            self._invoke_method_values(constructor, frame[0], values, kwargs)
             return frame[0]
 
         info = parent.find_method(name)
@@ -500,7 +530,7 @@ class KoskriptInterpreter(object):
             raise Errors.RuntimeError(f"'{name}' is static, call it as .{name}()")
 
         self._check_private(info, info.defining_class)
-        return self._invoke_method_values(info, frame[0], values)
+        return self._invoke_method_values(info, frame[0], values, kwargs)
 
     def _static_ref_value(self, name: str):
         frame = self._current_frame()

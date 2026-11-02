@@ -53,6 +53,7 @@ ReturnStmt = namedtuple("ReturnStmt", ["value"])
 FnDef  = namedtuple("FnDef",  ["name", "params", "body", "decorators", "implicit_return"],
                     defaults=((), False))
 FnCall = namedtuple("FnCall", ["name", "args"])
+KwArg = namedtuple("KwArg", ["name", "value"])
 LambdaFnDef = namedtuple("LambdaFnDef", ["params", "body"])
 ImportStmt = namedtuple("ImportStmt", ["path", "name"])
 ErrorDef = namedtuple("ErrorDef", ["name", "params", "body"])

@@ -157,15 +157,36 @@ class _Emitter(object):
     def _arguments(self, args, env):
         return ", ".join(f"({self.expr(arg, env)})" for arg in args)
 
+    def _split_args(self, args, env):
+        positional = []
+        keywords = []
+        for arg in args:
+            if type(arg) is KwArg:
+                keywords.append((arg.name, self.expr(arg.value, env)))
+            else:
+                positional.append(self.expr(arg, env))
+        pos_code = ", ".join(f"({item})" for item in positional)
+        if keywords:
+            kw_code = "{" + ", ".join(
+                f"{name!r}: ({value})" for name, value in keywords) + "}"
+            return pos_code, kw_code
+        return pos_code, None
+
     def _call(self, node, env="env"):
-        args = self._arguments(node.args, env)
+        pos_code, kw_code = self._split_args(node.args, env)
         callee_node = node.name
         if type(callee_node) is MemberAccess and len(callee_node.attrs) == 1:
             base = self.expr(callee_node.name, env)
             attr = callee_node.attrs[0].name
-            return f"_i.call_member_values(({base}), {attr!r}, [{args}])"
+            if kw_code is None:
+                return (f"_i.call_member_values(({base}), {attr!r}, "
+                        f"[{pos_code}])")
+            return (f"_i.call_member_values(({base}), {attr!r}, "
+                    f"[{pos_code}], {kw_code})")
         callee = self.expr(callee_node, env)
-        return f"_i.call_value(({callee}), [{args}])"
+        if kw_code is None:
+            return f"_i.call_value(({callee}), [{pos_code}])"
+        return f"_i.call_value(({callee}), [{pos_code}], {kw_code})"
 
     def expr(self, node, env="env"):
         kind = type(node)
@@ -221,20 +242,30 @@ class _Emitter(object):
             return self._call(node, env)
         if kind is NewExpr:
             target = self.expr(node.target, env)
-            args = self._arguments(node.args, env)
-            return f"_i.new_value({node.label!r}, ({target}), [{args}])"
+            pos_code, kw_code = self._split_args(node.args, env)
+            if kw_code is None:
+                return f"_i.new_value({node.label!r}, ({target}), [{pos_code}])"
+            return f"_i.new_value({node.label!r}, ({target}), [{pos_code}], {kw_code})"
         if kind is MethodCall:
-            args = self._arguments(node.args, env)
-            return f"_i._method_call_values({node.name!r}, [{args}])"
+            pos_code, kw_code = self._split_args(node.args, env)
+            if kw_code is None:
+                return f"_i._method_call_values({node.name!r}, [{pos_code}])"
+            return f"_i._method_call_values({node.name!r}, [{pos_code}], {kw_code})"
         if kind is SuperCall:
-            args = self._arguments(node.args, env)
-            return f"_i._super_call_values({node.name!r}, [{args}])"
+            pos_code, kw_code = self._split_args(node.args, env)
+            if kw_code is None:
+                return f"_i._super_call_values({node.name!r}, [{pos_code}])"
+            return f"_i._super_call_values({node.name!r}, [{pos_code}], {kw_code})"
         if kind is StaticRef:
             return f"_i._static_ref_value({node.name!r})"
         if kind is BoundMethodCall:
+            pos_code, kw_code = self._split_args(node.args, env)
             target = self.expr(node.target, env)
-            args = self._arguments(node.args, env)
-            return f"_i._bound_method_call_values(({target}), {node.name!r}, [{args}])"
+            if kw_code is None:
+                return (f"_i._bound_method_call_values(({target}), {node.name!r}, "
+                        f"[{pos_code}])")
+            return (f"_i._bound_method_call_values(({target}), {node.name!r}, "
+                    f"[{pos_code}], {kw_code})")
         if kind is ThisRef:
             return "_i.current_instance()"
         fallback = self._closure(node)

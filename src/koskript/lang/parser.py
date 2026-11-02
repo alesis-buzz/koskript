@@ -682,11 +682,23 @@ class Parser(object):
         """The arguments of a call, with the opening `(` already consumed."""
         args = []
         if not self._check(")"):
-            args.append(self.parse_expression())
+            args.append(self._parse_argument())
             while self._accept(","):
-                args.append(self.parse_expression())
+                if self._check(")"):
+                    break
+                args.append(self._parse_argument())
         self._expect(")", ("',' or ')'",))
         return args
+
+    def _parse_argument(self):
+        if self._check("NAME") and self.tokens[self.pos + 1].type == "=" \
+                and self.tokens[self.pos + 1].text == "=":
+            name = self._current().value
+            self.pos += 1
+            self._expect("=", ("'='",))
+            from .emtypes import KwArg
+            return KwArg(name=name, value=self.parse_expression())
+        return self.parse_expression()
 
 
 def parse(code: str) -> list:

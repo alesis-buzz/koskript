@@ -150,6 +150,7 @@ def build():
         "print": _print,
         "len": _len,
         "type": _type,
+        "typeof": _type,
         "str": _str,
         "int": _int,
         "float": _float,
