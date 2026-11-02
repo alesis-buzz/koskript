@@ -97,11 +97,12 @@ class Parser(object):
     returns the node of :mod:`.emtypes` it produces.
     """
 
-    __slots__ = ("tokens", "pos")
+    __slots__ = ("tokens", "pos", "allow_bodyless")
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, allow_bodyless: bool = False):
         self.tokens = Lexer(code).tokenize()
         self.pos = 0
+        self.allow_bodyless = allow_bodyless
 
     # TOKENS ###################################################################
 
@@ -236,6 +237,12 @@ class Parser(object):
         self._expect("}", ("'}'",))
         return statements
 
+    def _parse_optional_block(self) -> list:
+        """A block, or an empty body when parsing a `.kosh` header."""
+        if self.allow_bodyless and not self._check("{"):
+            return []
+        return self.parse_block()
+
     def parse_condition(self):
         """The `( expr )` of a loop or branch."""
         self._expect("(", ("'('",))
@@ -308,7 +315,7 @@ class Parser(object):
         self.pos += 1
         name = self._expect("NAME", _NAMES).value
         params = self.parse_parameters()
-        body = self.parse_block()
+        body = self._parse_optional_block()
         if decorators:
             return FnDef(name=name, params=params, body=body,
                          decorators=decorators, implicit_return=implicit_return)
@@ -423,7 +430,7 @@ class Parser(object):
         self._expect("fun", ("'fun'",))
         name = self._expect("NAME", ("a method name",)).value
         params = self.parse_parameters()
-        body = self.parse_block()
+        body = self._parse_optional_block()
         if decorators:
             return ClassMethod(name=name, params=params, body=body,
                                modifiers=modifiers, is_constructor=False,
@@ -701,14 +708,17 @@ class Parser(object):
         return self.parse_expression()
 
 
-def parse(code: str) -> list:
+def parse(code: str, allow_bodyless: bool = False) -> list:
     """Parse ``code`` into a list of statements.
+
+    ``allow_bodyless`` is used for ``.kosh`` headers, where function and
+    method bodies are optional.
 
     Raises ``Errors.SyntaxError`` with the offending line, column and context
     when the source cannot be parsed.
     """
     try:
-        return Parser(code).parse()
+        return Parser(code, allow_bodyless=allow_bodyless).parse()
     except ParseError as error:
         raise Errors.SyntaxError(format_syntax_error(code, error)) from None
     except RecursionError:

@@ -51,7 +51,7 @@ def load_header(source_or_path):
     else:
         code = source_or_path
 
-    statements = parse(code)
+    statements = parse(code, allow_bodyless=True)
     symbols = {"functions": [], "classes": [], "constants": [], "namespaces": []}
     _collect(statements, symbols)
     return symbols

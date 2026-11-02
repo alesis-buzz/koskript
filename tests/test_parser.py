@@ -571,7 +571,7 @@ class ParserSelectionTest(unittest.TestCase):
         if not script.is_file():
             self.skipTest("examples/benchmark.kos is not present")
 
-        code = script.read_text()
+        code = script.read_text(encoding="utf-8-sig")
         reports = []
         for flag in (False, True):
             runtime = koskript.KoskriptRuntime(native_parser_experiment=flag)
@@ -653,6 +653,36 @@ class CompiledCacheTest(unittest.TestCase):
         with self.assertRaises(koskript.Errors.SyntaxError):
             runtime.execute("let = 1")
         self.assertEqual(runtime.execute("return 5"), 5)
+
+
+class HeaderTest(unittest.TestCase):
+    def test_bodyless_declarations(self):
+        from koskript.headers import load_header
+
+        symbols = load_header(
+            "fun add(a, b)\n"
+            "class Point {\n"
+            "    public x = 0\n"
+            "    public fun x()\n"
+            "    public fun move(dx, dy)\n"
+            "}\n"
+            "namespace Utils {\n"
+            "    fun double(x)\n"
+            "}\n"
+            "const PI = 3.14\n"
+        )
+        self.assertEqual([f["name"] for f in symbols["functions"]], ["add"])
+        self.assertEqual(symbols["classes"][0]["name"], "Point")
+        self.assertEqual([m["name"] for m in symbols["classes"][0]["methods"]],
+                         ["x", "move"])
+        self.assertEqual(symbols["namespaces"][0]["name"], "Utils")
+        self.assertEqual(symbols["constants"], ["PI"])
+
+    def test_bodies_are_still_required_in_scripts(self):
+        from koskript import Errors
+
+        with self.assertRaises(Errors.SyntaxError):
+            parse("fun add(a, b)")
 
 
 if __name__ == "__main__":
