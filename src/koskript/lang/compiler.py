@@ -775,13 +775,23 @@ class _Unit(object):
         item = self.new_temp()
         body_scope = ScopeInfo(loop_scope)
         self.compiler._predeclare(node.body, body_scope)
-        self.line(f"for {item} in {iterable}:")
-        self.indent += 1
-        # fresh scope per iteration so closures capture this iteration's value
-        loop_env = self.new_env(loop_scope, env)
-        self.line(f"{loop_env}.values[{var_index}] = {item}")
-        self._emit_loop_body(node.body, body_scope, loop_scope, loop_env)
-        self.indent -= 1
+        captures = _captures_scope(node.body)
+        if captures:
+            self.line(f"for {item} in {iterable}:")
+            self.indent += 1
+            # fresh scope per iteration so closures capture this iteration's value
+            loop_env = self.new_env(loop_scope, env)
+            self.line(f"{loop_env}.values[{var_index}] = {item}")
+            self._emit_loop_body(node.body, body_scope, loop_scope, loop_env)
+            self.indent -= 1
+        else:
+            # reuse a single scope: no closure captures this iteration's value
+            loop_env = self.new_env(loop_scope, env)
+            self.line(f"for {item} in {iterable}:")
+            self.indent += 1
+            self.line(f"{loop_env}.values[{var_index}] = {item}")
+            self._emit_loop_body(node.body, body_scope, loop_scope, loop_env)
+            self.indent -= 1
 
     def _emit_foreach(self, node, scope, env):
         mapping = self.new_temp()
@@ -798,14 +808,23 @@ class _Unit(object):
         value = self.new_temp()
         body_scope = ScopeInfo(loop_scope)
         self.compiler._predeclare(node.body, body_scope)
-        self.line(f"for {key}, {value} in {mapping}.items():")
-        self.indent += 1
-        # fresh scope per iteration so closures capture this iteration's values
-        loop_env = self.new_env(loop_scope, env)
-        self.line(f"{loop_env}.values[{key_index}] = {key}")
-        self.line(f"{loop_env}.values[{value_index}] = {value}")
-        self._emit_loop_body(node.body, body_scope, loop_scope, loop_env)
-        self.indent -= 1
+        captures = _captures_scope(node.body)
+        if captures:
+            self.line(f"for {key}, {value} in {mapping}.items():")
+            self.indent += 1
+            loop_env = self.new_env(loop_scope, env)
+            self.line(f"{loop_env}.values[{key_index}] = {key}")
+            self.line(f"{loop_env}.values[{value_index}] = {value}")
+            self._emit_loop_body(node.body, body_scope, loop_scope, loop_env)
+            self.indent -= 1
+        else:
+            loop_env = self.new_env(loop_scope, env)
+            self.line(f"for {key}, {value} in {mapping}.items():")
+            self.indent += 1
+            self.line(f"{loop_env}.values[{key_index}] = {key}")
+            self.line(f"{loop_env}.values[{value_index}] = {value}")
+            self._emit_loop_body(node.body, body_scope, loop_scope, loop_env)
+            self.indent -= 1
 
     def _emit_loop_body(self, statements, body_scope, parent_scope, parent_env):
         # The try only exists to catch `break` / `continue`; a body without
